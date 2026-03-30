@@ -1,4 +1,4 @@
-package org.example.service;
+package org.example.service.impl;
 
 import org.example.entity.ParkingLot;
 import org.example.repository.ParkingLotRepository;

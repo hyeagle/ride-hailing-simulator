@@ -1,7 +1,7 @@
 package org.example.controller;
 
 import org.example.entity.Order;
-import org.example.service.OrderService;
+import org.example.service.impl.OrderService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -68,6 +68,16 @@ public class OrderController {
     public ResponseEntity<Order> cancel(@PathVariable String id) {
         try {
             return ResponseEntity.ok(orderService.cancel(id));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @PostMapping("/simulate")
+    public ResponseEntity<Integer> simulateOrders(@RequestParam int count) {
+        try {
+            int created = orderService.simulateOrders(count);
+            return ResponseEntity.ok(created);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().build();
         }

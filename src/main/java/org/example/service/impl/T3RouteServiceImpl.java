@@ -1,10 +1,11 @@
-package org.example.service;
+package org.example.service.impl;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.example.dto.RouteRequest;
 import org.example.dto.RouteResponse;
+import org.example.service.RouteService;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -60,18 +61,31 @@ public class T3RouteServiceImpl implements RouteService {
     @Override
     public RouteResponse planRoute(RouteRequest request) {
         try {
-            // 1. 将地址转换为坐标
-            String[] originCoords = geocode(request.getOrigin(), request.getApiKey());
-            String[] destCoords = geocode(request.getDestination(), request.getApiKey());
+            // 1. 将地址或坐标转换为坐标
+            String[] originCoords;
+            String[] destCoords;
+            
+            // 检查是否是坐标格式（包含逗号且为数字）
+            if (isCoordinateFormat(request.getOrigin())) {
+                originCoords = request.getOrigin().split(",");
+            } else {
+                originCoords = geocode(request.getOrigin(), request.getApiKey());
+            }
+            
+            if (isCoordinateFormat(request.getDestination())) {
+                destCoords = request.getDestination().split(",");
+            } else {
+                destCoords = geocode(request.getDestination(), request.getApiKey());
+            }
 
             // 2. 构建请求体
             Map<String, Object> origin = new HashMap<>();
-            origin.put("lng", Double.parseDouble(originCoords[0]));
-            origin.put("lat", Double.parseDouble(originCoords[1]));
+            origin.put("lng", Double.parseDouble(originCoords[0].trim()));
+            origin.put("lat", Double.parseDouble(originCoords[1].trim()));
 
             Map<String, Object> dest = new HashMap<>();
-            dest.put("lng", Double.parseDouble(destCoords[0]));
-            dest.put("lat", Double.parseDouble(destCoords[1]));
+            dest.put("lng", Double.parseDouble(destCoords[0].trim()));
+            dest.put("lat", Double.parseDouble(destCoords[1].trim()));
 
             Map<String, Object> requestBody = new HashMap<>();
             requestBody.put("origin", origin);
@@ -136,6 +150,26 @@ public class T3RouteServiceImpl implements RouteService {
                     .status(500)
                     .message("路线规划异常: " + e.getMessage())
                     .build();
+        }
+    }
+    
+    /**
+     * 检查字符串是否为坐标格式（如 "118.795,32.05"）
+     */
+    private boolean isCoordinateFormat(String str) {
+        if (str == null || str.isEmpty()) {
+            return false;
+        }
+        String[] parts = str.split(",");
+        if (parts.length != 2) {
+            return false;
+        }
+        try {
+            Double.parseDouble(parts[0].trim());
+            Double.parseDouble(parts[1].trim());
+            return true;
+        } catch (NumberFormatException e) {
+            return false;
         }
     }
 }

@@ -1,7 +1,7 @@
 package org.example.controller;
 
 import org.example.entity.Station;
-import org.example.service.StationService;
+import org.example.service.impl.StationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;

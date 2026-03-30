@@ -1,7 +1,7 @@
 package org.example.controller;
 
 import org.example.entity.ParkingLot;
-import org.example.service.ParkingLotService;
+import org.example.service.impl.ParkingLotService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;

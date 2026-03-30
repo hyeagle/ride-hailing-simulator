@@ -48,13 +48,24 @@ public class Order {
     private String vehicleId; // 履约车辆ID
 
     private LocalDateTime actualArrivalTime;
+    
+    /**
+     * 接乘开始时间
+     */
+    private LocalDateTime pickupStartTime;
+    
+    /**
+     * 接乘到达时间
+     */
+    private LocalDateTime pickupArrivalTime;
 
     /**
      * 订单状态枚举
      */
     public enum OrderStatus {
         待派单,
-        履约中,
+        待接乘,
+        进行中,
         已完成,
         已取消
     }

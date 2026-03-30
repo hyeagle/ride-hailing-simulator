@@ -1,7 +1,7 @@
 package org.example.controller;
 
 import org.example.entity.Vehicle;
-import org.example.service.VehicleService;
+import org.example.service.impl.VehicleService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -47,6 +47,25 @@ public class VehicleController {
     @GetMapping("/gis-grid/{gisGrid}")
     public List<Vehicle> getByGisGrid(@PathVariable String gisGrid) {
         return vehicleService.findByGisGrid(gisGrid);
+    }
+
+    @GetMapping("/search")
+    public List<Vehicle> search(
+            @RequestParam(required = false) String vin,
+            @RequestParam(required = false) String gisGrid,
+            @RequestParam(required = false) Integer minBattery,
+            @RequestParam(required = false) Integer maxBattery) {
+        return vehicleService.search(vin, gisGrid, minBattery, maxBattery);
+    }
+
+    @PostMapping("/power-on")
+    public ResponseEntity<Integer> powerOnVehicles(@RequestParam(defaultValue = "1") int count) {
+        try {
+            int actualCount = vehicleService.powerOnVehicles(count);
+            return ResponseEntity.ok(actualCount);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().build();
+        }
     }
 
     @PostMapping

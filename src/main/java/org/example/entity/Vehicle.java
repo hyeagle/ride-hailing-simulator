@@ -6,6 +6,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
+
 /**
  * 车辆实体
  */
@@ -43,12 +45,68 @@ public class Vehicle {
     @Column(nullable = false, length = 20)
     private String gisGrid; // GIS-GRID-XXX
 
+    // ========== 调度相关字段 ==========
+    
+    /**
+     * 目标站点ID
+     */
+    @Column(length = 15)
+    private String targetStationId;
+
+    /**
+     * 调度路线（JSON格式存储路径点）
+     */
+    @Column(columnDefinition = "TEXT")
+    private String dispatchPath;
+
+    /**
+     * 调度进度 (0-100)
+     */
+    private Integer dispatchProgress;
+
+    /**
+     * 调度开始时间
+     */
+    private LocalDateTime dispatchStartTime;
+
+    // ========== 派单相关字段 ==========
+    
+    /**
+     * 接乘路线（JSON格式存储路径点）
+     */
+    @Column(columnDefinition = "TEXT")
+    private String pickupPath;
+    
+    /**
+     * 接乘进度 (0-100)
+     */
+    private Integer pickupProgress;
+    
+    /**
+     * 履约路线（JSON格式存储路径点）
+     */
+    @Column(columnDefinition = "TEXT")
+    private String deliveryPath;
+    
+    /**
+     * 履约进度 (0-100)
+     */
+    private Integer deliveryProgress;
+    
+    /**
+     * 派单开始时间
+     */
+    private LocalDateTime dispatchOrderStartTime;
+    
     /**
      * 车辆状态枚举
      */
     public enum VehicleStatus {
+        休息中,
         履约中,
         巡游中,
+        调度中,
+        接乘中,
         维护中
     }
 }

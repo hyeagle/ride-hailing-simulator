@@ -22,10 +22,12 @@
         .panel { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: none; }
         .panel.active { display: block; }
         
-        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 20px; }
-        .stat-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px; }
-        .stat-card h3 { font-size: 14px; opacity: 0.8; margin-bottom: 10px; }
-        .stat-card .number { font-size: 32px; font-weight: bold; }
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
+        .stat-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 16px; border-radius: 6px; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; }
+        .stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+        .stat-card.active { box-shadow: 0 0 0 3px rgba(24, 144, 255, 0.5); }
+        .stat-card h3 { font-size: 12px; opacity: 0.8; margin-bottom: 6px; }
+        .stat-card .number { font-size: 22px; font-weight: bold; }
         
         table { width: 100%; border-collapse: collapse; margin-top: 15px; }
         th, td { padding: 12px; text-align: left; border-bottom: 1px solid #f0f0f0; }
@@ -37,6 +39,7 @@
         .btn-success { background: #52c41a; color: white; }
         .btn-danger { background: #ff4d4f; color: white; }
         .btn-warning { background: #faad14; color: white; }
+        .btn-info { background: #1890ff; color: white; }
         .btn:hover { opacity: 0.8; }
         
         .form-group { margin-bottom: 15px; }
@@ -55,6 +58,11 @@
         .badge-warning { background: #fffbe6; color: #faad14; }
         .badge-danger { background: #fff2f0; color: #ff4d4f; }
         .badge-info { background: #e6f7ff; color: #1890ff; }
+        
+        .map-filter { display: none; margin-bottom: 10px; padding: 10px; background: #f5f5f5; border-radius: 4px; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .map-filter.show { display: flex; }
+        .map-filter label { color: #666; font-size: 14px; }
+        .map-filter select { padding: 4px 8px; border: 1px solid #d9d9d9; border-radius: 4px; }
         
         .map-container { height: 400px; border-radius: 8px; overflow: hidden; margin-top: 15px; }
         #map { width: 100%; height: 100%; }
@@ -75,16 +83,48 @@
             <button class="tab" onclick="showPanel('vehicles')">🚗 车辆管理</button>
             <button class="tab" onclick="showPanel('stations')">📍 站点管理</button>
             <button class="tab" onclick="showPanel('orders')">📋 订单管理</button>
+            <button class="tab" onclick="showPanel('order-dispatch')">🎯 派单监控</button>
+            <button class="tab" onclick="showPanel('vehicle-dispatch')">🔄 车辆调度</button>
             <button class="tab" onclick="showPanel('route')">🗺️ 路线规划</button>
         </div>
         
         <!-- 概览面板 -->
         <div id="overview" class="panel active">
             <div class="stats">
-                <div class="stat-card"><h3>停车场总数</h3><div class="number" id="stat-parking">0</div></div>
-                <div class="stat-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);"><h3>车辆总数</h3><div class="number" id="stat-vehicles">0</div></div>
-                <div class="stat-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);"><h3>站点总数</h3><div class="number" id="stat-stations">0</div></div>
-                <div class="stat-card" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);"><h3>订单总数</h3><div class="number" id="stat-orders">0</div></div>
+                <div class="stat-card" id="card-parking" onclick="showParkingLotsOnMap()"><h3>停车场总数</h3><div class="number" id="stat-parking">0</div></div>
+                <div class="stat-card" id="card-vehicles" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);" onclick="showVehiclesOnMap()"><h3>车辆总数</h3><div class="number" id="stat-vehicles">0</div></div>
+                <div class="stat-card" id="card-stations" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);" onclick="showStationsOnMap()"><h3>站点总数</h3><div class="number" id="stat-stations">0</div></div>
+                <div class="stat-card" id="card-orders" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);" onclick="showOrdersOnMap()"><h3>订单总数</h3><div class="number" id="stat-orders">0</div></div>
+                <div class="stat-card" id="card-dispatch" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);"><h3>执行任务车辆</h3><div class="number" id="stat-dispatch">0</div><small style="font-size: 11px;">(派单+调度)</small></div>
+            </div>
+            <div class="map-filter" id="vehicle-map-filter">
+                <label>车辆状态筛选：</label>
+                <label style="margin: 0 8px; cursor: pointer;"><input type="checkbox" id="filter-巡游中" checked onchange="filterVehiclesByStatus()"> 🟢 巡游中</label>
+                <label style="margin: 0 8px; cursor: pointer;"><input type="checkbox" id="filter-调度中" checked onchange="filterVehiclesByStatus()"> 🟠 调度中</label>
+                <label style="margin: 0 8px; cursor: pointer;"><input type="checkbox" id="filter-接乘中" checked onchange="filterVehiclesByStatus()"> 🔷 接乘中</label>
+                <label style="margin: 0 8px; cursor: pointer;"><input type="checkbox" id="filter-履约中" checked onchange="filterVehiclesByStatus()"> 🔵 履约中</label>
+                <label style="margin: 0 8px; cursor: pointer;"><input type="checkbox" id="filter-维护中" onchange="filterVehiclesByStatus()"> 🟡 维护中</label>
+                <label style="margin: 0 8px; cursor: pointer;"><input type="checkbox" id="filter-休息中" onchange="filterVehiclesByStatus()"> 🔴 休息中</label>
+                <button class="btn btn-primary" style="margin-left: 10px;" onclick="selectAllVehicleStatus()">全选</button>
+                <button class="btn" style="background:#d9d9d9;" onclick="deselectAllVehicleStatus()">全不选</button>
+            </div>
+            <div class="map-filter" id="station-map-filter">
+                <label>站点类型筛选：</label>
+                <button class="btn btn-primary" onclick="showStationsOnMapByType('')">全部</button>
+                <button class="btn" style="background:#ff6b6b;color:white;" onclick="showStationsOnMapByType('商圈')">🏪 商圈</button>
+                <button class="btn" style="background:#51cf66;color:white;" onclick="showStationsOnMapByType('景区')">🏞️ 景区</button>
+                <button class="btn" style="background:#339af0;color:white;" onclick="showStationsOnMapByType('医院')">🏥 医院</button>
+                <button class="btn" style="background:#845ef7;color:white;" onclick="showStationsOnMapByType('社区')">🏘️ 社区</button>
+                <button class="btn" style="background:#fcc419;color:white;" onclick="showStationsOnMapByType('交通枢纽')">🚉 交通枢纽</button>
+            </div>
+            <div class="map-filter" id="order-map-filter">
+                <label>订单状态筛选：</label>
+                <button class="btn btn-primary" onclick="showOrdersOnMapByStatus('')">全部</button>
+                <button class="btn btn-info" onclick="showOrdersOnMapByStatus('待派单')">📋 待派单</button>
+                <button class="btn btn-warning" onclick="showOrdersOnMapByStatus('待接乘')">🚕 待接乘</button>
+                <button class="btn btn-success" onclick="showOrdersOnMapByStatus('进行中')">🚗 进行中</button>
+                <button class="btn" style="background:#52c41a;color:white;" onclick="showOrdersOnMapByStatus('已完成')">✅ 已完成</button>
+                <button class="btn btn-danger" onclick="showOrdersOnMapByStatus('已取消')">❌ 已取消</button>
             </div>
             <div class="map-container"><div id="map"></div></div>
         </div>
@@ -104,15 +144,46 @@
         <div id="vehicles" class="panel">
             <div style="margin-bottom: 15px;">
                 <button class="btn btn-primary" onclick="showModal('vehicle')">+ 新增车辆</button>
-                <select id="vehicle-status-filter" onchange="filterVehicles()">
-                    <option value="">全部状态</option>
-                    <option value="巡游中">巡游中</option>
-                    <option value="履约中">履约中</option>
-                    <option value="维护中">维护中</option>
-                </select>
+                <button class="btn btn-info" onclick="toggleVehicleFilters()">筛选条件</button>
+                <button class="btn" style="background:#d9d9d9;" onclick="resetVehicleFilters()">重置</button>
+                <button class="btn btn-success" onclick="showPowerOnModal()">⚡ 车辆上电</button>
+            </div>
+            <div id="vehicle-filter-panel" style="display:none; margin-bottom: 15px; padding: 15px; background: #f5f5f5; border-radius: 4px;">
+                <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end;">
+                    <div class="form-group" style="margin-bottom: 0; min-width: 200px;">
+                        <label>VIN码</label>
+                        <input type="text" id="vehicle-vin-filter" placeholder="输入VIN码模糊查询" style="width: 100%;">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0; min-width: 150px;">
+                        <label>当前所在网格</label>
+                        <select id="vehicle-grid-filter" style="width: 100%;">
+                            <option value="">全部网格</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0; min-width: 100px;">
+                        <label>电量范围(%)</label>
+                        <div style="display: flex; gap: 5px; align-items: center;">
+                            <input type="number" id="vehicle-battery-min" placeholder="最小" min="0" max="100" style="width: 70px;">
+                            <span>-</span>
+                            <input type="number" id="vehicle-battery-max" placeholder="最大" min="0" max="100" style="width: 70px;">
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label>状态</label>
+                        <select id="vehicle-status-filter" style="width: 120px;">
+                            <option value="">全部状态</option>
+                            <option value="巡游中">巡游中</option>
+                            <option value="调度中">调度中</option>
+                            <option value="履约中">履约中</option>
+                            <option value="维护中">维护中</option>
+                            <option value="休息中">休息中</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-primary" onclick="searchVehicles()" style="height: 36px; margin-top: 22px;">查询</button>
+                </div>
             </div>
             <table id="vehicle-table">
-                <thead><tr><th>ID</th><th>VIN</th><th>状态</th><th>订单ID</th><th>电量</th><th>经度</th><th>纬度</th><th>操作</th></tr></thead>
+                <thead><tr><th>ID</th><th>VIN</th><th>状态</th><th>订单ID</th><th>电量</th><th>网格</th><th>经度</th><th>纬度</th><th>操作</th></tr></thead>
                 <tbody></tbody>
             </table>
         </div>
@@ -140,10 +211,12 @@
         <div id="orders" class="panel">
             <div style="margin-bottom: 15px;">
                 <button class="btn btn-primary" onclick="showModal('order')">+ 新增订单</button>
+                <button class="btn btn-success" onclick="showSimulateModal()">📊 模拟订单</button>
                 <select id="order-status-filter" onchange="filterOrders()">
                     <option value="">全部状态</option>
                     <option value="待派单">待派单</option>
-                    <option value="履约中">履约中</option>
+                    <option value="待接乘">待接乘</option>
+                    <option value="进行中">进行中</option>
                     <option value="已完成">已完成</option>
                     <option value="已取消">已取消</option>
                 </select>
@@ -152,6 +225,44 @@
                 <thead><tr><th>订单ID</th><th>起始站</th><th>终止站</th><th>开始时间</th><th>预计到达</th><th>收益</th><th>状态</th><th>操作</th></tr></thead>
                 <tbody></tbody>
             </table>
+        </div>
+        
+        <!-- 派单监控面板 -->
+        <div id="order-dispatch" class="panel">
+            <h3 style="margin-bottom: 15px; color: #1890ff;">🎯 订单派单监控</h3>
+            <p style="margin-bottom: 15px; color: #666; font-size: 14px;">派单：将"巡游中"车辆与"待派单"订单匹配，车辆接乘客后履约</p>
+            <div style="margin-bottom: 15px;">
+                <button class="btn btn-primary" onclick="triggerOrderDispatch()">🔄 手动触发派单</button>
+                <button class="btn btn-success" onclick="showOrderDispatchOnMap()">📍 显示派单车辆</button>
+                <span style="margin-left: 15px; color: #666;">自动派单间隔：2分钟</span>
+            </div>
+            <div class="map-container" style="margin-top: 15px;"><div id="order-dispatch-map"></div></div>
+            <div id="order-dispatch-info" style="margin-top: 15px;">
+                <h4 style="margin-bottom: 10px;">派单车辆列表</h4>
+                <table id="order-dispatch-table">
+                    <thead><tr><th>车辆ID</th><th>VIN</th><th>订单ID</th><th>状态</th><th>路线</th><th>进度</th><th>起点</th><th>终点</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- 车辆调度面板 -->
+        <div id="vehicle-dispatch" class="panel">
+            <h3 style="margin-bottom: 15px; color: #52c41a;">🔄 车辆调度监控</h3>
+            <p style="margin-bottom: 15px; color: #666; font-size: 14px;">调度：将"巡游中"车辆调度到指定站点（与订单无关）</p>
+            <div style="margin-bottom: 15px;">
+                <button class="btn btn-primary" onclick="triggerVehicleDispatch()">🔄 手动触发调度</button>
+                <button class="btn btn-success" onclick="showVehicleDispatchOnMap()">📍 显示调度车辆</button>
+                <span style="margin-left: 15px; color: #666;">自动调度间隔：2分钟</span>
+            </div>
+            <div class="map-container" style="margin-top: 15px;"><div id="vehicle-dispatch-map"></div></div>
+            <div id="vehicle-dispatch-info" style="margin-top: 15px;">
+                <h4 style="margin-bottom: 10px;">调度车辆列表</h4>
+                <table id="vehicle-dispatch-table">
+                    <thead><tr><th>车辆ID</th><th>VIN</th><th>目标站点</th><th>进度</th><th>开始时间</th><th>状态</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
         </div>
         
         <!-- 路线规划面板 -->
@@ -164,12 +275,9 @@
                 <label>目的地点</label>
                 <input type="text" id="route-end" placeholder="例如: 天安门">
             </div>
-            <div class="form-group">
-                <label>行驶速度 (km/h)</label>
-                <input type="number" id="route-speed" value="30" min="1" max="120">
-            </div>
             <button class="btn btn-primary" onclick="planRoute()">规划路线</button>
             <button class="btn btn-success" id="driveBtn" onclick="startDriving()" disabled>开始行驶</button>
+            <span style="margin-left: 15px; color: #666;">行驶速度：40 km/s（±5 km/s 随机扰动）</span>
             <div class="map-container" style="margin-top: 15px;"><div id="route-map"></div></div>
             <div id="route-info" style="margin-top: 15px; padding: 10px; background: #f5f5f5; border-radius: 4px; display: none;">
                 <p>距离: <span id="route-distance"></span></p>
@@ -190,11 +298,20 @@
         </div>
     </div>
     
-    <script src="https://webapi.amap.com/maps?v=2.0&key=xxx"></script>
+    <script src="https://webapi.amap.com/maps?v=2.0&key=a11441078b7fc432340d6440f0b64148"></script>
     <script>
-        let map, routeMap;
+        let map, routeMap, orderDispatchMap, vehicleDispatchMap;
         let currentPath = [];
         let carMarker, polyline, isDriving = false, animationId;
+        let overviewMarkers = []; // 概览页地图标记
+        let selectedTypes = new Set(); // 多选：当前选中的类型集合
+        let orderDispatchUpdateInterval = null; // 派单更新定时器
+        let vehicleDispatchUpdateInterval = null; // 调度更新定时器
+        
+        // 概览页面调度车辆动画状态
+        let overviewDispatchVehicles = {}; // { vehicleId: { marker, polyline, destMarker, path, progress, animating } }
+        let overviewDispatchAnimationTimer = null;
+        let overviewDispatchUpdateInterval = null;
         
         // 初始化
         document.addEventListener('DOMContentLoaded', () => {
@@ -204,11 +321,300 @@
             loadVehicles();
             loadStations();
             loadOrders();
+            startOrderDispatchUpdate();
+            startVehicleDispatchUpdate();
+            startOverviewDispatchAnimation(); // 启动概览页调度动画
+            // 页面加载后默认显示车辆（非休息中、非维护中）
+            setTimeout(() => {
+                showVehiclesOnMap();
+            }, 500);
         });
         
         function initMaps() {
             map = new AMap.Map('map', { zoom: 11, center: [118.795, 32.05], viewMode: '2D' });
             routeMap = new AMap.Map('route-map', { zoom: 11, center: [116.397, 39.909], viewMode: '2D' });
+            orderDispatchMap = new AMap.Map('order-dispatch-map', { zoom: 11, center: [118.795, 32.05], viewMode: '2D' });
+            vehicleDispatchMap = new AMap.Map('vehicle-dispatch-map', { zoom: 11, center: [118.795, 32.05], viewMode: '2D' });
+        }
+        
+        // 清除概览地图上的标记
+        function clearOverviewMarkers() {
+            overviewMarkers.forEach(m => map.remove(m));
+            overviewMarkers = [];
+        }
+        
+        // 高亮卡片（多选）
+        function highlightCard(type) {
+            if (selectedTypes.has(type)) {
+                selectedTypes.delete(type);
+            } else {
+                selectedTypes.add(type);
+            }
+            // 更新所有卡片的active状态
+            document.querySelectorAll('.stat-card').forEach(c => c.classList.remove('active'));
+            selectedTypes.forEach(t => {
+                document.getElementById('card-' + t)?.classList.add('active');
+            });
+        }
+        
+        // 刷新地图显示（根据当前选中的类型）
+        async function refreshOverviewMap() {
+            hideAllFilters();
+            
+            // 先加载所有数据
+            const promises = [];
+            if (selectedTypes.has('parking')) promises.push(fetch('/api/parking-lots').then(r => r.json()));
+            else promises.push(Promise.resolve(null));
+            if (selectedTypes.has('vehicles')) promises.push(fetch('/api/vehicles').then(r => r.json()));
+            else promises.push(Promise.resolve(null));
+            if (selectedTypes.has('stations')) promises.push(fetch('/api/stations').then(r => r.json()));
+            else promises.push(Promise.resolve(null));
+            if (selectedTypes.has('orders')) {
+                promises.push(fetch('/api/orders').then(r => r.json()));
+            } else {
+                promises.push(Promise.resolve(null));
+            }
+            // 订单需要的站点数据
+            if (selectedTypes.has('orders')) {
+                promises.push(fetch('/api/stations').then(r => r.json()));
+            } else {
+                promises.push(Promise.resolve(null));
+            }
+            
+            const results = await Promise.all(promises);
+            const [parkingData, vehicleData, stationData, orderData, orderStationData] = results;
+            
+            // 数据加载完成后，先清除需要更新的标记，再渲染新标记
+            const typesToRefresh = ['parking', 'vehicles', 'stations', 'orders'];
+            typesToRefresh.forEach(type => {
+                // 清除该类型的旧标记
+                const oldMarkers = overviewMarkers.filter(m => m.getExtData?.() === type);
+                oldMarkers.forEach(m => map.remove(m));
+                overviewMarkers = overviewMarkers.filter(m => m.getExtData?.() !== type);
+            });
+            
+            // 渲染新标记
+            if (selectedTypes.has('parking') && parkingData) {
+                renderParkingLotMarkers(parkingData);
+            }
+            if (selectedTypes.has('vehicles') && vehicleData) {
+                const selectedStatuses = getSelectedVehicleStatuses();
+                const filteredVehicles = vehicleData.filter(v => selectedStatuses.includes(v.status));
+                renderVehicleMarkers(filteredVehicles, false);
+                document.getElementById('vehicle-map-filter').classList.add('show');
+            }
+            if (selectedTypes.has('stations') && stationData) {
+                renderStationMarkers(stationData.slice(0, 200));
+                document.getElementById('station-map-filter').classList.add('show');
+            }
+            if (selectedTypes.has('orders') && orderData && orderStationData) {
+                renderOrderMarkers(orderData, orderStationData);
+                document.getElementById('order-map-filter').classList.add('show');
+            }
+        }
+        
+        // 渲染停车场标记
+        function renderParkingLotMarkers(data) {
+            data.forEach(p => {
+                const marker = new AMap.Marker({
+                    position: [p.longitude, p.latitude],
+                    content: `<div style="width: 24px; height: 24px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 50% 50% 50% 0; transform: rotate(-45deg); box-shadow: 0 2px 6px rgba(0,0,0,0.3); border: 2px solid white; display: flex; align-items: center; justify-content: center;">
+                        <span style="transform: rotate(45deg); font-size: 10px;">🅿️</span>
+                    </div>`,
+                    offset: new AMap.Pixel(-12, -24),
+                    title: `${p.name}\n容量: ${p.capacity}\n网格: ${p.gisGrid}`
+                });
+                marker.getExtData = () => 'parking';
+                map.add(marker);
+                overviewMarkers.push(marker);
+            });
+        }
+        
+        // 显示停车场位置（多选切换）
+        async function showParkingLotsOnMap() {
+            highlightCard('parking');
+            await refreshOverviewMap();
+        }
+        
+        // 显示车辆位置（多选切换）
+        async function showVehiclesOnMap() {
+            highlightCard('vehicles');
+            await refreshOverviewMap();
+        }
+        
+        // 获取选中的状态列表
+        function getSelectedVehicleStatuses() {
+            const statuses = [];
+            const allStatuses = ['巡游中', '调度中', '接乘中', '履约中', '维护中', '休息中'];
+            allStatuses.forEach(s => {
+                const checkbox = document.getElementById('filter-' + s);
+                if (checkbox && checkbox.checked) {
+                    statuses.push(s);
+                }
+            });
+            return statuses;
+        }
+        
+        // 多选状态筛选车辆
+        async function filterVehiclesByStatus() {
+            if (!selectedTypes.has('vehicles')) {
+                // 如果没有选中车辆类型，先选中
+                selectedTypes.add('vehicles');
+                document.getElementById('card-vehicles')?.classList.add('active');
+            }
+            await refreshOverviewMap();
+        }
+        
+        // 全选状态
+        function selectAllVehicleStatus() {
+            ['巡游中', '调度中', '接乘中', '履约中', '维护中', '休息中'].forEach(s => {
+                const checkbox = document.getElementById('filter-' + s);
+                if (checkbox) checkbox.checked = true;
+            });
+            filterVehiclesByStatus();
+        }
+        
+        // 全不选状态
+        function deselectAllVehicleStatus() {
+            ['巡游中', '调度中', '接乘中', '履约中', '维护中', '休息中'].forEach(s => {
+                const checkbox = document.getElementById('filter-' + s);
+                if (checkbox) checkbox.checked = false;
+            });
+            filterVehiclesByStatus();
+        }
+        
+        // 渲染车辆标记
+        function renderVehicleMarkers(data, autoFit = true) {
+            const statusColors = { '巡游中': '#52c41a', '接乘中': '#13c2c2', '履约中': '#1890ff', '调度中': '#fa8c16', '维护中': '#faad14', '休息中': '#ff4d4f' };
+            
+            data.forEach(v => {
+                // 跳过已在调度动画中的车辆（避免重复显示）
+                if (overviewDispatchVehicles[String(v.id)]) {
+                    return;
+                }
+                
+                const color = statusColors[v.status] || '#f5576c';
+                const marker = new AMap.Marker({
+                    position: [v.longitude, v.latitude],
+                    content: `<div style="width: 20px; height: 20px; background: ${color}; border-radius: 50%; box-shadow: 0 2px 6px rgba(0,0,0,0.3); border: 2px solid white; display: flex; align-items: center; justify-content: center;">
+                        <span style="font-size: 8px;">🚗</span>
+                    </div>`,
+                    offset: new AMap.Pixel(-10, -10),
+                    title: `车辆${v.id}\nVIN: ${v.vin}\n状态: ${v.status}\n电量: ${v.batteryPercent}%\n订单: ${v.orderId || '无'}`
+                });
+                marker.getExtData = () => 'vehicles';
+                map.add(marker);
+                overviewMarkers.push(marker);
+            });
+            
+            // 不再自动缩放地图
+        }
+        
+        // 显示站点位置（多选切换）
+        async function showStationsOnMap() {
+            highlightCard('stations');
+            await refreshOverviewMap();
+        }
+        
+        // 按类型筛选显示站点
+        async function showStationsOnMapByType(type) {
+            if (!selectedTypes.has('stations')) {
+                selectedTypes.add('stations');
+                document.getElementById('card-stations')?.classList.add('active');
+            }
+            // 先清空之前的站点标记
+            const oldMarkers = overviewMarkers.filter(m => m.getExtData?.() === 'stations');
+            oldMarkers.forEach(m => map.remove(m));
+            overviewMarkers = overviewMarkers.filter(m => m.getExtData?.() !== 'stations');
+            
+            let data;
+            if (type) {
+                data = await fetch(`/api/stations/type/${encodeURIComponent(type)}`).then(r => r.json());
+            } else {
+                data = await fetch('/api/stations').then(r => r.json());
+            }
+            
+            renderStationMarkers(data.slice(0, 200));
+        }
+        
+        // 渲染站点标记
+        function renderStationMarkers(data) {
+            const typeColors = { '商圈': '#ff6b6b', '景区': '#51cf66', '医院': '#339af0', '社区': '#845ef7', '交通枢纽': '#fcc419' };
+            
+            data.forEach(s => {
+                const color = typeColors[s.type] || '#4facfe';
+                const marker = new AMap.Marker({
+                    position: [s.longitude, s.latitude],
+                    content: `<div style="width: 18px; height: 18px; background: ${color}; border-radius: 50%; box-shadow: 0 2px 6px rgba(0,0,0,0.3); border: 2px solid white;"></div>`,
+                    offset: new AMap.Pixel(-9, -9),
+                    title: `${s.name}\n类型: ${s.type}\n备注: ${s.remark || '无'}`
+                });
+                marker.getExtData = () => 'stations';
+                map.add(marker);
+                overviewMarkers.push(marker);
+            });
+        }
+        
+        // 显示订单位置（多选切换）
+        async function showOrdersOnMap() {
+            highlightCard('orders');
+            await refreshOverviewMap();
+        }
+        
+        // 按状态筛选显示订单
+        async function showOrdersOnMapByStatus(status) {
+            if (!selectedTypes.has('orders')) {
+                selectedTypes.add('orders');
+                document.getElementById('card-orders')?.classList.add('active');
+            }
+            // 先清空之前的订单标记
+            const oldMarkers = overviewMarkers.filter(m => m.getExtData?.() === 'orders');
+            oldMarkers.forEach(m => map.remove(m));
+            overviewMarkers = overviewMarkers.filter(m => m.getExtData?.() !== 'orders');
+            
+            let data;
+            if (status) {
+                data = await fetch(`/api/orders/status/${encodeURIComponent(status)}`).then(r => r.json());
+            } else {
+                data = await fetch('/api/orders').then(r => r.json());
+            }
+            
+            const stations = await fetch('/api/stations').then(r => r.json());
+            renderOrderMarkers(data, stations);
+        }
+        
+        // 渲染订单标记
+        function renderOrderMarkers(data, stations) {
+            const stationMap = {};
+            stations.forEach(s => stationMap[s.id] = s);
+            
+            const statusColors = { '待派单': '#1890ff', '待接乘': '#fa8c16', '进行中': '#52c41a', '已完成': '#8c8c8c', '已取消': '#ff4d4f' };
+            
+            data.forEach(o => {
+                const originStation = stationMap[o.originStationId];
+                const destStation = stationMap[o.destinationStationId];
+                if (!originStation) return;
+                
+                const color = statusColors[o.status] || '#43e97b';
+                const marker = new AMap.Marker({
+                    position: [originStation.longitude, originStation.latitude],
+                    content: `<div style="width: 16px; height: 16px; background: ${color}; border-radius: 50%; box-shadow: 0 2px 6px rgba(0,0,0,0.3); border: 2px solid white; position: relative;">
+                        <div style="position: absolute; top: -2px; right: -2px; width: 6px; height: 6px; background: white; border-radius: 50%; border: 1px solid ${color};"></div>
+                    </div>`,
+                    offset: new AMap.Pixel(-8, -8),
+                    title: `订单${o.id}\n状态: ${o.status}\n起点: ${originStation.name || o.originStationId}\n终点: ${destStation ? destStation.name : o.destinationStationId}\n收益: ¥${o.estimatedRevenue.toFixed(2)}`
+                });
+                marker.getExtData = () => 'orders';
+                map.add(marker);
+                overviewMarkers.push(marker);
+            });
+        }
+        
+        // 隐藏所有筛选栏
+        function hideAllFilters() {
+            document.getElementById('vehicle-map-filter').classList.remove('show');
+            document.getElementById('station-map-filter').classList.remove('show');
+            document.getElementById('order-map-filter').classList.remove('show');
         }
         
         function showPanel(panelId) {
@@ -219,16 +625,21 @@
         }
         
         async function loadStats() {
-            const [parking, vehicles, stations, orders] = await Promise.all([
+            const [parking, vehicles, stations, orders, orderDispatch, vehicleDispatch] = await Promise.all([
                 fetch('/api/parking-lots').then(r => r.json()),
                 fetch('/api/vehicles').then(r => r.json()),
                 fetch('/api/stations').then(r => r.json()),
-                fetch('/api/orders').then(r => r.json())
+                fetch('/api/orders').then(r => r.json()),
+                fetch('/api/order-dispatch/info').then(r => r.json()),
+                fetch('/api/dispatch/info').then(r => r.json())
             ]);
             document.getElementById('stat-parking').textContent = parking.length;
             document.getElementById('stat-vehicles').textContent = vehicles.length;
             document.getElementById('stat-stations').textContent = stations.length;
             document.getElementById('stat-orders').textContent = orders.length;
+            // 派单车辆数 + 调度车辆数
+            const totalDispatch = orderDispatch.length + vehicleDispatch.length;
+            document.getElementById('stat-dispatch').textContent = totalDispatch;
         }
         
         async function loadParkingLots() {
@@ -249,6 +660,64 @@
         async function loadVehicles() {
             const data = await fetch('/api/vehicles').then(r => r.json());
             renderVehicles(data);
+            // 加载网格列表
+            loadVehicleGridOptions(data);
+        }
+        
+        // 加载网格选项
+        function loadVehicleGridOptions(vehicles) {
+            const grids = [...new Set(vehicles.map(v => v.gisGrid))].filter(g => g).sort();
+            const select = document.getElementById('vehicle-grid-filter');
+            const currentValue = select.value;
+            select.innerHTML = '<option value="">全部网格</option>' + grids.map(g => `<option value="${g}">${g}</option>`).join('');
+            if (grids.includes(currentValue)) {
+                select.value = currentValue;
+            }
+        }
+        
+        // 切换筛选面板
+        function toggleVehicleFilters() {
+            const panel = document.getElementById('vehicle-filter-panel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        }
+        
+        // 重置筛选条件
+        function resetVehicleFilters() {
+            document.getElementById('vehicle-vin-filter').value = '';
+            document.getElementById('vehicle-grid-filter').value = '';
+            document.getElementById('vehicle-battery-min').value = '';
+            document.getElementById('vehicle-battery-max').value = '';
+            document.getElementById('vehicle-status-filter').value = '';
+            loadVehicles();
+        }
+        
+        // 综合查询车辆
+        async function searchVehicles() {
+            const vin = document.getElementById('vehicle-vin-filter').value.trim();
+            const gisGrid = document.getElementById('vehicle-grid-filter').value;
+            const minBattery = document.getElementById('vehicle-battery-min').value;
+            const maxBattery = document.getElementById('vehicle-battery-max').value;
+            const status = document.getElementById('vehicle-status-filter').value;
+            
+            // 先按条件查询
+            let data;
+            if (vin || gisGrid || minBattery || maxBattery) {
+                const params = new URLSearchParams();
+                if (vin) params.append('vin', vin);
+                if (gisGrid) params.append('gisGrid', gisGrid);
+                if (minBattery) params.append('minBattery', minBattery);
+                if (maxBattery) params.append('maxBattery', maxBattery);
+                data = await fetch(`/api/vehicles/search?${params.toString()}`).then(r => r.json());
+            } else {
+                data = await fetch('/api/vehicles').then(r => r.json());
+            }
+            
+            // 如果有状态筛选，在前端过滤
+            if (status) {
+                data = data.filter(v => v.status === status);
+            }
+            
+            renderVehicles(data);
         }
         
         function renderVehicles(data) {
@@ -257,7 +726,7 @@
                 <tr>
                     <td>${v.id}</td><td>${v.vin}</td>
                     <td><span class="badge ${getBadgeClass(v.status)}">${v.status}</span></td>
-                    <td>${v.orderId || '-'}</td><td>${v.batteryPercent}%</td>
+                    <td>${v.orderId || '-'}</td><td>${v.batteryPercent}%</td><td>${v.gisGrid || '-'}</td>
                     <td>${v.longitude.toFixed(6)}</td><td>${v.latitude.toFixed(6)}</td>
                     <td>
                         <button class="btn btn-warning" onclick="editVehicle('${v.id}')">编辑</button>
@@ -268,10 +737,8 @@
         }
         
         async function filterVehicles() {
-            const status = document.getElementById('vehicle-status-filter').value;
-            if (!status) { loadVehicles(); return; }
-            const data = await fetch(`/api/vehicles/status/${encodeURIComponent(status)}`).then(r => r.json());
-            renderVehicles(data);
+            // 使用综合查询
+            searchVehicles();
         }
         
         async function loadStations() {
@@ -317,7 +784,7 @@
                     <td><span class="badge ${getBadgeClass(o.status)}">${o.status}</span></td>
                     <td>
                         ${o.status === '待派单' ? `<button class="btn btn-primary" onclick="showModal('assign', '${o.id}')">派单</button>` : ''}
-                        ${o.status === '履约中' ? `<button class="btn btn-success" onclick="completeOrder('${o.id}')">完成</button>` : ''}
+                        ${o.status === '进行中' ? `<button class="btn btn-success" onclick="completeOrder('${o.id}')">完成</button>` : ''}
                         ${o.status !== '已完成' && o.status !== '已取消' ? `<button class="btn btn-danger" onclick="cancelOrder('${o.id}')">取消</button>` : ''}
                     </td>
                 </tr>
@@ -369,7 +836,7 @@
             isDriving = true;
             document.getElementById('driveBtn').textContent = '停止行驶';
             
-            let currentIndex = 0, traveledDistance = 0, currentSpeedKmh = parseFloat(document.getElementById('route-speed').value) || 30;
+            let currentIndex = 0, traveledDistance = 0, currentSpeedKms = 40; // 40 km/s 基础速度
             const intervalMs = 30;
             
             const calculateDistance = (lat1, lng1, lat2, lng2) => {
@@ -382,14 +849,15 @@
             
             const speedInterval = setInterval(() => {
                 if (!isDriving) { clearInterval(speedInterval); return; }
-                currentSpeedKmh = (parseFloat(document.getElementById('route-speed').value) || 30) * (0.9 + Math.random() * 0.2);
-                document.getElementById('current-speed').textContent = currentSpeedKmh.toFixed(1);
+                // 40 km/s + 随机5 km/s扰动
+                currentSpeedKms = 40 + (Math.random() - 0.5) * 10;
+                document.getElementById('current-speed').textContent = currentSpeedKms.toFixed(1) + ' km/s';
             }, 1000);
             
             animationId = setInterval(() => {
                 if (!isDriving) { clearInterval(speedInterval); clearInterval(animationId); return; }
                 
-                const speedMps = currentSpeedKmh * 1000 / 3600;
+                const speedMps = currentSpeedKms * 1000; // km/s 转 m/s
                 traveledDistance += speedMps * (intervalMs / 1000);
                 
                 while (currentIndex < currentPath.length - 1) {
@@ -423,19 +891,1440 @@
             document.getElementById('current-speed').textContent = '-';
         }
         
+        // ========== 调度相关函数 ==========
+        
+        // 调度车辆动画状态
+        let dispatchVehicles = {}; // { vehicleId: { marker, path, currentIndex, progress, animating } }
+        let dispatchAnimationTimer = null;
+        
+        /**
+         * 启动调度信息更新和动画
+         */
+        function startDispatchUpdate() {
+            // 初始加载
+            loadDispatchInfoAndStartAnimation();
+            
+            // 每5秒检查是否有新的调度任务
+            dispatchUpdateInterval = setInterval(() => {
+                loadDispatchInfoAndStartAnimation();
+            }, 5000);
+        }
+        
+        /**
+         * 加载调度信息并启动动画
+         */
+        async function loadDispatchInfoAndStartAnimation() {
+            try {
+                const data = await fetch('/api/dispatch/info').then(r => r.json());
+                
+                // 更新表格
+                const tbody = document.querySelector('#order-dispatch-table tbody');
+                tbody.innerHTML = data.map(d => {
+                    const vehicle = dispatchVehicles[d.vehicleId];
+                    const displayProgress = vehicle ? Math.round(vehicle.progress) : 0;
+                    return `
+                    <tr>
+                        <td>${d.vehicleId}</td>
+                        <td>${d.vin}</td>
+                        <td>${d.targetStationName || d.targetStationId}</td>
+                        <td>
+                            <div style="background: #f0f0f0; border-radius: 4px; height: 20px; overflow: hidden;">
+                                <div style="background: linear-gradient(90deg, #52c41a, #1890ff); width: ${displayProgress}%; height: 100%; transition: width 0.1s;"></div>
+                            </div>
+                            <small>${displayProgress}%</small>
+                        </td>
+                        <td>${d.startTime ? new Date(d.startTime).toLocaleString('zh-CN') : '-'}</td>
+                        <td><span class="badge badge-warning">调度中</span></td>
+                    </tr>
+                `}).join('');
+                
+                // 更新统计数字
+                document.getElementById('stat-dispatch').textContent = data.length;
+                
+                // 同步调度车辆状态
+                syncDispatchVehicles(data);
+                
+            } catch (error) {
+                console.error('加载调度信息失败', error);
+            }
+        }
+        
+        /**
+         * 同步调度车辆状态
+         */
+        function syncDispatchVehicles(data) {
+            const currentVehicleIds = new Set(Object.keys(dispatchVehicles));
+            const newVehicleIds = new Set(data.map(d => d.vehicleId));
+            
+            // 移除已完成的车辆
+            currentVehicleIds.forEach(id => {
+                if (!newVehicleIds.has(id)) {
+                    const vehicle = dispatchVehicles[id];
+                    if (vehicle.marker) {
+                        dispatchMap.remove(vehicle.marker);
+                    }
+                    if (vehicle.polyline) {
+                        dispatchMap.remove(vehicle.polyline);
+                    }
+                    if (vehicle.destMarker) {
+                        dispatchMap.remove(vehicle.destMarker);
+                    }
+                    delete dispatchVehicles[id];
+                }
+            });
+            
+            // 添加新的调度车辆
+            data.forEach(d => {
+                if (!dispatchVehicles[d.vehicleId] && d.path && d.path.length > 0) {
+                    // 创建车辆标记
+                    const marker = new AMap.Marker({
+                        position: [d.path[0][0], d.path[0][1]],
+                        content: `<div style="background: #fa8c16; color: white; padding: 6px 10px; border-radius: 4px; font-size: 13px; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
+                            🚗 ${d.vehicleId}
+                        </div>`,
+                        offset: new AMap.Pixel(-15, -15),
+                        autoRotation: true
+                    });
+                    dispatchMap.add(marker);
+                    
+                    // 创建路线
+                    const polyline = new AMap.Polyline({
+                        path: d.path,
+                        strokeColor: '#fa8c16',
+                        strokeWeight: 5,
+                        strokeOpacity: 0.8,
+                        strokeStyle: 'dashed'
+                    });
+                    dispatchMap.add(polyline);
+                    
+                    // 创建目标站点标记
+                    let destMarker = null;
+                    if (d.targetLongitude && d.targetLatitude) {
+                        destMarker = new AMap.Marker({
+                            position: [d.targetLongitude, d.targetLatitude],
+                            content: `<div style="background: #52c41a; color: white; padding: 6px 10px; border-radius: 4px; font-size: 13px; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
+                                🎯 ${d.targetStationName || '目标'}
+                            </div>`,
+                            offset: new AMap.Pixel(-15, -15)
+                        });
+                        dispatchMap.add(destMarker);
+                    }
+                    
+                    // 保存车辆状态
+                    dispatchVehicles[d.vehicleId] = {
+                        marker,
+                        polyline,
+                        destMarker,
+                        path: d.path,
+                        currentIndex: 0,
+                        progress: 0,
+                        animating: true,
+                        vehicleId: d.vehicleId
+                    };
+                    
+                    // 适应地图视野
+                    orderDispatchMap.setFitView([polyline], false, [50, 50, 50, 50]);
+                }
+            });
+            
+            // 启动动画循环（如果还没有启动）
+            if (!dispatchAnimationTimer && Object.keys(dispatchVehicles).length > 0) {
+                startDispatchAnimation();
+            }
+        }
+        
+        /**
+         * 启动调度动画循环
+         */
+        function startDispatchAnimation() {
+            const intervalMs = 50; // 每50ms更新一次
+            const speedKmh = 30; // 速度30km/h
+            const speedMps = speedKmh * 1000 / 3600; // 米/秒
+            const progressPerSecond = 2; // 每秒进度增加2%（约50秒完成）
+            
+            dispatchAnimationTimer = setInterval(() => {
+                const vehiclesToRemove = [];
+                
+                Object.values(dispatchVehicles).forEach(vehicle => {
+                    if (!vehicle.animating || !vehicle.path || vehicle.path.length === 0) return;
+                    
+                    // 更新进度
+                    vehicle.progress += progressPerSecond * (intervalMs / 1000);
+                    
+                    if (vehicle.progress >= 100) {
+                        vehicle.progress = 100;
+                        vehicle.animating = false;
+                        vehiclesToRemove.push(vehicle.vehicleId);
+                        return;
+                    }
+                    
+                    // 计算当前位置索引
+                    const totalPoints = vehicle.path.length;
+                    const currentIndex = Math.floor((vehicle.progress / 100) * (totalPoints - 1));
+                    
+                    if (currentIndex < totalPoints) {
+                        const pos = vehicle.path[currentIndex];
+                        if (vehicle.marker && pos.length >= 2) {
+                            vehicle.marker.setPosition([pos[0], pos[1]]);
+                            
+                            // 计算角度
+                            if (currentIndex < totalPoints - 1) {
+                                const nextPos = vehicle.path[currentIndex + 1];
+                                const angle = Math.atan2(nextPos[1] - pos[1], nextPos[0] - pos[0]) * 180 / Math.PI;
+                                vehicle.marker.setAngle(angle);
+                            }
+                        }
+                    }
+                    
+                    // 更新标记显示进度
+                    if (vehicle.marker) {
+                        vehicle.marker.setContent(`<div style="background: #fa8c16; color: white; padding: 6px 10px; border-radius: 4px; font-size: 13px; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
+                            🚗 ${vehicle.vehicleId} <span style="font-size: 11px;">(${Math.round(vehicle.progress)}%)</span>
+                        </div>`);
+                    }
+                });
+                
+                // 处理到达的车辆
+                vehiclesToRemove.forEach(vehicleId => {
+                    notifyVehicleArrived(vehicleId);
+                });
+                
+            }, intervalMs);
+        }
+        
+        /**
+         * 通知后端车辆已到达
+         */
+        async function notifyVehicleArrived(vehicleId) {
+            try {
+                await fetch(`/api/dispatch/arrived/${vehicleId}`, { method: 'POST' });
+                console.log(`车辆 ${vehicleId} 已到达目标站点`);
+                
+                // 清理本地状态
+                const vehicle = dispatchVehicles[vehicleId];
+                if (vehicle) {
+                    if (vehicle.marker) dispatchMap.remove(vehicle.marker);
+                    if (vehicle.polyline) dispatchMap.remove(vehicle.polyline);
+                    if (vehicle.destMarker) dispatchMap.remove(vehicle.destMarker);
+                    delete dispatchVehicles[vehicleId];
+                }
+                
+                // 刷新统计数据
+                loadStats();
+            } catch (error) {
+                console.error(`通知车辆到达失败: ${vehicleId}`, error);
+            }
+        }
+        
+        /**
+         * 显示调度车辆在地图上
+         */
+        async function showDispatchOnMap() {
+            hideAllFilters();
+            clearOverviewMarkers();
+            highlightCard('dispatch');
+            
+            const data = await fetch('/api/dispatch/info').then(r => r.json());
+            
+            data.forEach(d => {
+                // 检查是否已在调度地图上动画显示
+                if (dispatchVehicles[d.vehicleId]) {
+                    const v = dispatchVehicles[d.vehicleId];
+                    // 在概览地图上也显示
+                    const marker = new AMap.Marker({
+                        position: v.marker.getPosition(),
+                        content: v.marker.getContent(),
+                        offset: new AMap.Pixel(-15, -15)
+                    });
+                    map.add(marker);
+                    overviewMarkers.push(marker);
+                    
+                    // 路线
+                    if (v.polyline) {
+                        const polyline = new AMap.Polyline({
+                            path: v.path,
+                            strokeColor: '#fa8c16',
+                            strokeWeight: 4,
+                            strokeOpacity: 0.8,
+                            strokeStyle: 'dashed'
+                        });
+                        map.add(polyline);
+                        overviewMarkers.push(polyline);
+                    }
+                } else if (d.path && d.path.length > 0) {
+                    // 静态显示
+                    const marker = new AMap.Marker({
+                        position: [d.longitude, d.latitude],
+                        content: `<div style="background: #fa8c16; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,0.3);">
+                            🚗 ${d.vehicleId}
+                        </div>`,
+                        offset: new AMap.Pixel(-15, -15)
+                    });
+                    map.add(marker);
+                    overviewMarkers.push(marker);
+                    
+                    const polyline = new AMap.Polyline({
+                        path: d.path,
+                        strokeColor: '#fa8c16',
+                        strokeWeight: 4,
+                        strokeOpacity: 0.8,
+                        strokeStyle: 'dashed'
+                    });
+                    map.add(polyline);
+                    overviewMarkers.push(polyline);
+                }
+                
+                // 目标站点
+                if (d.targetLongitude && d.targetLatitude) {
+                    const destMarker = new AMap.Marker({
+                        position: [d.targetLongitude, d.targetLatitude],
+                        content: `<div style="background: #52c41a; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,0.3);">
+                            📍 ${d.targetStationName || '目标'}
+                        </div>`,
+                        offset: new AMap.Pixel(-15, -15)
+                    });
+                    map.add(destMarker);
+                    overviewMarkers.push(destMarker);
+                }
+            });
+            // 不自动缩放地图
+        }
+        
+        /**
+         * 手动触发订单派单
+         */
+        async function triggerOrderDispatch() {
+            try {
+                const response = await fetch('/api/order-dispatch/trigger', { method: 'POST' });
+                const msg = await response.text();
+                alert(msg);
+                loadOrderDispatchInfo();
+                loadStats();
+            } catch (error) {
+                alert('触发派单失败：' + error.message);
+            }
+        }
+        
+        // ========== 车辆调度相关函数 ==========
+        
+        let vehicleDispatchVehicles = {}; // { vehicleId: { marker, path, currentIndex, progress, animating } }
+        let vehicleDispatchAnimationTimer = null;
+        
+        /**
+         * 启动车辆调度信息更新和动画
+         */
+        function startVehicleDispatchUpdate() {
+            // 初始加载
+            loadVehicleDispatchInfo();
+            
+            // 每5秒检查是否有新的调度任务
+            vehicleDispatchUpdateInterval = setInterval(() => {
+                loadVehicleDispatchInfo();
+            }, 5000);
+        }
+        
+        /**
+         * 加载车辆调度信息并启动动画
+         */
+        async function loadVehicleDispatchInfo() {
+            try {
+                const data = await fetch('/api/dispatch/info').then(r => r.json());
+                
+                // 更新表格
+                const tbody = document.querySelector('#vehicle-dispatch-table tbody');
+                tbody.innerHTML = data.map(d => {
+                    const vehicle = vehicleDispatchVehicles[d.vehicleId];
+                    const displayProgress = vehicle ? Math.round(vehicle.progress) : (d.progress || 0);
+                    return `
+                    <tr>
+                        <td>${d.vehicleId}</td>
+                        <td>${d.vin}</td>
+                        <td>${d.targetStationName || d.targetStationId}</td>
+                        <td>
+                            <div style="background: #f0f0f0; border-radius: 4px; height: 20px; overflow: hidden;">
+                                <div style="background: linear-gradient(90deg, #52c41a, #1890ff); width: ${displayProgress}%; height: 100%; transition: width 0.1s;"></div>
+                            </div>
+                            <small>${displayProgress}%</small>
+                        </td>
+                        <td>${d.startTime ? new Date(d.startTime).toLocaleString('zh-CN') : '-'}</td>
+                        <td><span class="badge badge-warning">调度中</span></td>
+                    </tr>
+                `}).join('');
+                
+                // 同步调度车辆状态
+                syncVehicleDispatchVehicles(data);
+                
+            } catch (error) {
+                console.error('加载车辆调度信息失败', error);
+            }
+        }
+        
+        /**
+         * 同步车辆调度状态
+         */
+        function syncVehicleDispatchVehicles(data) {
+            const currentVehicleIds = new Set(Object.keys(vehicleDispatchVehicles));
+            const newVehicleIds = new Set(data.map(d => d.vehicleId));
+            
+            // 移除已完成的车辆
+            currentVehicleIds.forEach(id => {
+                if (!newVehicleIds.has(id)) {
+                    const vehicle = vehicleDispatchVehicles[id];
+                    if (vehicle.marker) vehicleDispatchMap.remove(vehicle.marker);
+                    if (vehicle.polyline) vehicleDispatchMap.remove(vehicle.polyline);
+                    if (vehicle.destMarker) vehicleDispatchMap.remove(vehicle.destMarker);
+                    delete vehicleDispatchVehicles[id];
+                }
+            });
+            
+            // 添加新的调度车辆
+            data.forEach(d => {
+                if (!vehicleDispatchVehicles[d.vehicleId] && d.path && d.path.length > 0) {
+                    // 创建车辆标记
+                    const marker = new AMap.Marker({
+                        position: [d.path[0][0], d.path[0][1]],
+                        content: `<div style="background: #fa8c16; color: white; padding: 6px 10px; border-radius: 4px; font-size: 13px; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
+                            🚗 ${d.vehicleId}
+                        </div>`,
+                        offset: new AMap.Pixel(-15, -15),
+                        autoRotation: true
+                    });
+                    vehicleDispatchMap.add(marker);
+                    
+                    // 创建路线
+                    const polyline = new AMap.Polyline({
+                        path: d.path,
+                        strokeColor: '#fa8c16',
+                        strokeWeight: 5,
+                        strokeOpacity: 0.8,
+                        strokeStyle: 'dashed'
+                    });
+                    vehicleDispatchMap.add(polyline);
+                    
+                    // 创建目标站点标记
+                    let destMarker = null;
+                    if (d.targetLongitude && d.targetLatitude) {
+                        destMarker = new AMap.Marker({
+                            position: [d.targetLongitude, d.targetLatitude],
+                            content: `<div style="background: #52c41a; color: white; padding: 6px 10px; border-radius: 4px; font-size: 13px; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
+                                🎯 ${d.targetStationName || '目标'}
+                            </div>`,
+                            offset: new AMap.Pixel(-15, -15)
+                        });
+                        vehicleDispatchMap.add(destMarker);
+                    }
+                    
+                    // 保存车辆状态
+                    vehicleDispatchVehicles[d.vehicleId] = {
+                        marker,
+                        polyline,
+                        destMarker,
+                        path: d.path,
+                        currentIndex: 0,
+                        progress: d.progress || 0,
+                        animating: true,
+                        vehicleId: d.vehicleId
+                    };
+                    
+                    // 适应地图视野
+                    vehicleDispatchMap.setFitView([polyline], false, [50, 50, 50, 50]);
+                }
+            });
+            
+            // 启动动画循环
+            if (!vehicleDispatchAnimationTimer && Object.keys(vehicleDispatchVehicles).length > 0) {
+                startVehicleDispatchAnimation();
+            }
+        }
+        
+        /**
+         * 启动车辆调度动画循环
+         */
+        function startVehicleDispatchAnimation() {
+            const intervalMs = 50;
+            const progressPerSecond = 2;
+            
+            vehicleDispatchAnimationTimer = setInterval(() => {
+                const vehiclesToRemove = [];
+                
+                Object.values(vehicleDispatchVehicles).forEach(vehicle => {
+                    if (!vehicle.animating || !vehicle.path || vehicle.path.length === 0) return;
+                    
+                    vehicle.progress += progressPerSecond * (intervalMs / 1000);
+                    
+                    if (vehicle.progress >= 100) {
+                        vehicle.progress = 100;
+                        vehicle.animating = false;
+                        vehiclesToRemove.push(vehicle.vehicleId);
+                        return;
+                    }
+                    
+                    const totalPoints = vehicle.path.length;
+                    const currentIndex = Math.floor((vehicle.progress / 100) * (totalPoints - 1));
+                    
+                    if (currentIndex < totalPoints) {
+                        const pos = vehicle.path[currentIndex];
+                        if (vehicle.marker && pos.length >= 2) {
+                            vehicle.marker.setPosition([pos[0], pos[1]]);
+                            
+                            if (currentIndex < totalPoints - 1) {
+                                const nextPos = vehicle.path[currentIndex + 1];
+                                const angle = Math.atan2(nextPos[1] - pos[1], nextPos[0] - pos[0]) * 180 / Math.PI;
+                                vehicle.marker.setAngle(angle);
+                            }
+                        }
+                    }
+                    
+                    if (vehicle.marker) {
+                        vehicle.marker.setContent(`<div style="background: #fa8c16; color: white; padding: 6px 10px; border-radius: 4px; font-size: 13px; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
+                            🚗 ${vehicle.vehicleId} <span style="font-size: 11px;">(${Math.round(vehicle.progress)}%)</span>
+                        </div>`);
+                    }
+                });
+                
+                vehiclesToRemove.forEach(vehicleId => {
+                    notifyVehicleDispatchArrived(vehicleId);
+                });
+                
+            }, intervalMs);
+        }
+        
+        /**
+         * 通知后端车辆调度已到达
+         */
+        async function notifyVehicleDispatchArrived(vehicleId) {
+            try {
+                await fetch(`/api/dispatch/arrived/${vehicleId}`, { method: 'POST' });
+                console.log(`车辆 ${vehicleId} 已到达调度目标站点`);
+                
+                const vehicle = vehicleDispatchVehicles[vehicleId];
+                if (vehicle) {
+                    if (vehicle.marker) vehicleDispatchMap.remove(vehicle.marker);
+                    if (vehicle.polyline) vehicleDispatchMap.remove(vehicle.polyline);
+                    if (vehicle.destMarker) vehicleDispatchMap.remove(vehicle.destMarker);
+                    delete vehicleDispatchVehicles[vehicleId];
+                }
+                
+                // 刷新统计数据和车辆列表
+                loadStats();
+                loadVehicles();
+            } catch (error) {
+                console.error(`通知车辆调度到达失败: ${vehicleId}`, error);
+            }
+        }
+        
+        /**
+         * 显示车辆调度在地图上
+         */
+        async function showVehicleDispatchOnMap() {
+            hideAllFilters();
+            clearOverviewMarkers();
+            highlightCard('dispatch');
+            
+            const data = await fetch('/api/dispatch/info').then(r => r.json());
+            
+            data.forEach(d => {
+                if (d.path && d.path.length > 0) {
+                    const marker = new AMap.Marker({
+                        position: [d.longitude, d.latitude],
+                        content: `<div style="background: #fa8c16; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,0.3);">
+                            🚗 ${d.vehicleId} (调度中)
+                        </div>`,
+                        offset: new AMap.Pixel(-15, -15)
+                    });
+                    map.add(marker);
+                    overviewMarkers.push(marker);
+                    
+                    const polyline = new AMap.Polyline({
+                        path: d.path,
+                        strokeColor: '#fa8c16',
+                        strokeWeight: 4,
+                        strokeOpacity: 0.8,
+                        strokeStyle: 'dashed'
+                    });
+                    map.add(polyline);
+                    overviewMarkers.push(polyline);
+                }
+                
+                if (d.targetLongitude && d.targetLatitude) {
+                    const destMarker = new AMap.Marker({
+                        position: [d.targetLongitude, d.targetLatitude],
+                        content: `<div style="background: #52c41a; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,0.3);">
+                            📍 ${d.targetStationName || '目标'}
+                        </div>`,
+                        offset: new AMap.Pixel(-15, -15)
+                    });
+                    map.add(destMarker);
+                    overviewMarkers.push(destMarker);
+                }
+            });
+            // 不自动缩放地图
+        }
+        
+        /**
+         * 手动触发车辆调度
+         */
+        async function triggerVehicleDispatch() {
+            try {
+                const response = await fetch('/api/dispatch/trigger', { method: 'POST' });
+                const msg = await response.text();
+                alert(msg);
+                loadVehicleDispatchInfo();
+                loadStats();
+            } catch (error) {
+                alert('触发调度失败：' + error.message);
+            }
+        }
+        
+        // ========== 概览页面调度动画 ==========
+        
+        /**
+         * 启动概览页面调度动画
+         */
+        function startOverviewDispatchAnimation() {
+            // 初始加载
+            loadOverviewDispatchInfo();
+            
+            // 每3秒同步一次调度信息
+            overviewDispatchUpdateInterval = setInterval(() => {
+                loadOverviewDispatchInfo();
+            }, 3000);
+        }
+        
+        /**
+         * 加载概览页面调度信息
+         */
+        async function loadOverviewDispatchInfo() {
+            try {
+                const data = await fetch('/api/dispatch/info').then(r => r.json());
+                syncOverviewDispatchVehicles(data);
+            } catch (error) {
+                console.error('加载概览调度信息失败', error);
+            }
+        }
+        
+        /**
+         * 从概览地图上移除指定车辆的标记
+         */
+        function removeVehicleMarkerFromOverview(vehicleId) {
+            // 遍历 overviewMarkers，找到并移除该车辆的标记
+            const markersToRemove = [];
+            overviewMarkers.forEach((marker, index) => {
+                // 检查标记的 extData 或通过位置匹配
+                if (marker.getExtData && marker.getExtData()) {
+                    const extData = marker.getExtData();
+                    // 使用字符串比较，避免类型不一致导致匹配失败
+                    if (String(extData.vehicleId) === String(vehicleId)) {
+                        markersToRemove.push(index);
+                        map.remove(marker);
+                    }
+                }
+            });
+            // 从数组中移除（倒序删除避免索引问题）
+            markersToRemove.reverse().forEach(index => {
+                overviewMarkers.splice(index, 1);
+            });
+        }
+        
+        /**
+         * 同步概览页面调度车辆
+         */
+        function syncOverviewDispatchVehicles(data) {
+            const currentVehicleIds = new Set(Object.keys(overviewDispatchVehicles));
+            const newVehicleIds = new Set(data.map(d => d.vehicleId));
+            
+            // 移除已完成的车辆（不在新数据中的）
+            currentVehicleIds.forEach(id => {
+                if (!newVehicleIds.has(id)) {
+                    const vehicle = overviewDispatchVehicles[id];
+                    if (vehicle.marker) map.remove(vehicle.marker);
+                    if (vehicle.polyline) map.remove(vehicle.polyline);
+                    if (vehicle.destMarker) map.remove(vehicle.destMarker);
+                    if (vehicle.originMarker) map.remove(vehicle.originMarker);
+                    delete overviewDispatchVehicles[id];
+                }
+            });
+            
+            // 添加新的调度车辆
+            data.forEach(d => {
+                if (!overviewDispatchVehicles[d.vehicleId] && d.path && d.path.length > 0) {
+                    // 先移除原有位置的普通车辆标记（避免重复显示）
+                    removeVehicleMarkerFromOverview(d.vehicleId);
+                    
+                    // 创建车辆标记 - 小圆点样式（橙色，调度中）
+                    const marker = new AMap.Marker({
+                        position: [d.path[0][0], d.path[0][1]],
+                        content: `<div style="width: 20px; height: 20px; background: #fa8c16; border-radius: 50%; box-shadow: 0 2px 6px rgba(0,0,0,0.3); border: 2px solid white; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+                            <span style="font-size: 10px;">🚗</span>
+                        </div>`,
+                        offset: new AMap.Pixel(-10, -10),
+                        zIndex: 100,
+                        extData: { vehicleId: d.vehicleId, type: 'dispatch' }
+                    });
+                    map.add(marker);
+                    
+                    // 点击事件：切换显示路线
+                    marker.on('click', function() {
+                        toggleDispatchRoute(d.vehicleId);
+                    });
+                    
+                    // 保存状态 - 前端完全控制进度
+                    overviewDispatchVehicles[d.vehicleId] = {
+                        marker,
+                        polyline: null,        // 路线（点击时创建）
+                        destMarker: null,      // 终点标记
+                        originMarker: null,    // 起点标记
+                        path: d.path,
+                        targetLongitude: d.targetLongitude,
+                        targetLatitude: d.targetLatitude,
+                        targetStationName: d.targetStationName,
+                        originLongitude: d.path[0][0],
+                        originLatitude: d.path[0][1],
+                        progress: 0,
+                        animating: true,
+                        routeVisible: false,   // 路线是否可见
+                        vehicleId: d.vehicleId
+                    };
+                }
+            });
+            
+            // 启动动画
+            if (!overviewDispatchAnimationTimer && Object.keys(overviewDispatchVehicles).length > 0) {
+                startOverviewDispatchAnimationLoop();
+            }
+        }
+        
+        /**
+         * 切换显示/隐藏调度路线
+         */
+        function toggleDispatchRoute(vehicleId) {
+            const vehicle = overviewDispatchVehicles[vehicleId];
+            if (!vehicle) return;
+            
+            if (vehicle.routeVisible) {
+                // 隐藏路线和标记
+                if (vehicle.polyline) {
+                    map.remove(vehicle.polyline);
+                    vehicle.polyline = null;
+                }
+                if (vehicle.destMarker) {
+                    map.remove(vehicle.destMarker);
+                    vehicle.destMarker = null;
+                }
+                if (vehicle.originMarker) {
+                    map.remove(vehicle.originMarker);
+                    vehicle.originMarker = null;
+                }
+                vehicle.routeVisible = false;
+            } else {
+                // 显示路线和标记
+                vehicle.polyline = new AMap.Polyline({
+                    path: vehicle.path,
+                    strokeColor: '#fa8c16',
+                    strokeWeight: 4,
+                    strokeOpacity: 0.7,
+                    strokeStyle: 'dashed'
+                });
+                map.add(vehicle.polyline);
+                
+                // 起点标记
+                vehicle.originMarker = new AMap.Marker({
+                    position: [vehicle.originLongitude, vehicle.originLatitude],
+                    content: `<div style="background: #1890ff; color: white; padding: 3px 6px; border-radius: 4px; font-size: 10px; white-space: nowrap; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+                        📍 起点
+                    </div>`,
+                    offset: new AMap.Pixel(-10, -10),
+                    zIndex: 99
+                });
+                map.add(vehicle.originMarker);
+                
+                // 终点标记
+                if (vehicle.targetLongitude && vehicle.targetLatitude) {
+                    vehicle.destMarker = new AMap.Marker({
+                        position: [vehicle.targetLongitude, vehicle.targetLatitude],
+                        content: `<div style="background: #52c41a; color: white; padding: 3px 6px; border-radius: 4px; font-size: 10px; white-space: nowrap; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+                            🎯 ${vehicle.targetStationName || '目标'}
+                        </div>`,
+                        offset: new AMap.Pixel(-10, -10),
+                        zIndex: 99
+                    });
+                    map.add(vehicle.destMarker);
+                }
+                vehicle.routeVisible = true;
+            }
+        }
+        
+        /**
+         * 启动概览页面调度动画循环
+         */
+        function startOverviewDispatchAnimationLoop() {
+            const intervalMs = 50;
+            const progressPerSecond = 2;
+            
+            overviewDispatchAnimationTimer = setInterval(() => {
+                const vehiclesArrived = [];
+                
+                Object.values(overviewDispatchVehicles).forEach(vehicle => {
+                    if (!vehicle.animating || !vehicle.path || vehicle.path.length === 0) return;
+                    
+                    // 更新进度（前端模拟，每秒增加2%）
+                    vehicle.progress += progressPerSecond * (intervalMs / 1000);
+                    
+                    if (vehicle.progress >= 100) {
+                        vehicle.progress = 100;
+                        vehicle.animating = false;
+                        vehiclesArrived.push(vehicle.vehicleId);
+                        return;
+                    }
+                    
+                    // 计算当前位置
+                    const totalPoints = vehicle.path.length;
+                    const currentIndex = Math.floor((vehicle.progress / 100) * (totalPoints - 1));
+                    
+                    if (currentIndex < totalPoints) {
+                        const pos = vehicle.path[currentIndex];
+                        if (vehicle.marker && pos.length >= 2) {
+                            vehicle.marker.setPosition([pos[0], pos[1]]);
+                        }
+                    }
+                });
+                
+                // 处理到达的车辆 - 变为绿色巡游中状态
+                vehiclesArrived.forEach(vehicleId => {
+                    const vehicle = overviewDispatchVehicles[vehicleId];
+                    if (vehicle) {
+                        // 隐藏路线和起点终点标记
+                        if (vehicle.polyline) {
+                            map.remove(vehicle.polyline);
+                            vehicle.polyline = null;
+                        }
+                        if (vehicle.destMarker) {
+                            map.remove(vehicle.destMarker);
+                            vehicle.destMarker = null;
+                        }
+                        if (vehicle.originMarker) {
+                            map.remove(vehicle.originMarker);
+                            vehicle.originMarker = null;
+                        }
+                        
+                        // 将车辆标记颜色改为绿色（巡游中）
+                        if (vehicle.marker && vehicle.targetLongitude && vehicle.targetLatitude) {
+                            vehicle.marker.setPosition([vehicle.targetLongitude, vehicle.targetLatitude]);
+                            vehicle.marker.setContent(`<div style="width: 20px; height: 20px; background: #52c41a; border-radius: 50%; box-shadow: 0 2px 6px rgba(0,0,0,0.3); border: 2px solid white; display: flex; align-items: center; justify-content: center;">
+                                <span style="font-size: 8px;">🚗</span>
+                            </div>`);
+                            // 将标记移到普通标记列表，不再跟随调度
+                            overviewMarkers.push(vehicle.marker);
+                        }
+                        
+                        delete overviewDispatchVehicles[vehicleId];
+                    }
+                    // 通知后端
+                    fetch(`/api/dispatch/arrived/${vehicleId}`, { method: 'POST' });
+                    loadStats();
+                    loadVehicles();
+                });
+                
+                // 如果没有车辆了，停止动画
+                if (Object.keys(overviewDispatchVehicles).length === 0) {
+                    clearInterval(overviewDispatchAnimationTimer);
+                    overviewDispatchAnimationTimer = null;
+                }
+            }, intervalMs);
+        }
+        
         function showModal(type, id) {
             document.getElementById('modal').classList.add('show');
-            // 简化实现，实际应该加载表单
-            document.getElementById('modal-title').textContent = type === 'assign' ? '派单' : '新增' + type;
-            document.getElementById('modal-body').innerHTML = '<p>功能开发中...</p>';
+            const title = { parking: '停车场', vehicle: '车辆', station: '站点', order: '订单', assign: '派单', simulate: '模拟订单' };
+            document.getElementById('modal-title').textContent = (title[type] || type);
+            
+            if (type === 'simulate') {
+                showSimulateModal();
+                return;
+            }
+            
+            if (type === 'parking') {
+                document.getElementById('modal-body').innerHTML = `
+                    <div class="form-group"><label>名称</label><input type="text" id="parking-name"></div>
+                    <div class="form-group"><label>GIS网格</label><input type="text" id="parking-gis"></div>
+                    <div class="form-group"><label>容量</label><input type="number" id="parking-capacity"></div>
+                    <div class="form-group"><label>经度</label><input type="number" step="0.000001" id="parking-lng"></div>
+                    <div class="form-group"><label>纬度</label><input type="number" step="0.000001" id="parking-lat"></div>
+                    <button class="btn btn-primary" onclick="saveParkingLot()">保存</button>
+                `;
+            } else if (type === 'vehicle') {
+                document.getElementById('modal-body').innerHTML = `
+                    <div class="form-group"><label>VIN</label><input type="text" id="vehicle-vin"></div>
+                    <div class="form-group"><label>状态</label>
+                        <select id="vehicle-status"><option value="巡游中">巡游中</option><option value="调度中">调度中</option><option value="接乘中">接乘中</option><option value="履约中">履约中</option><option value="维护中">维护中</option><option value="休息中">休息中</option></select>
+                    </div>
+                    <div class="form-group"><label>电量(%)</label><input type="number" id="vehicle-battery" min="0" max="100"></div>
+                    <div class="form-group"><label>经度</label><input type="number" step="0.000001" id="vehicle-lng"></div>
+                    <div class="form-group"><label>纬度</label><input type="number" step="0.000001" id="vehicle-lat"></div>
+                    <button class="btn btn-primary" onclick="saveVehicle()">保存</button>
+                `;
+            } else if (type === 'station') {
+                document.getElementById('modal-body').innerHTML = `
+                    <div class="form-group"><label>名称</label><input type="text" id="station-name"></div>
+                    <div class="form-group"><label>类型</label>
+                        <select id="station-type"><option value="商圈">商圈</option><option value="景区">景区</option><option value="医院">医院</option><option value="社区">社区</option><option value="交通枢纽">交通枢纽</option></select>
+                    </div>
+                    <div class="form-group"><label>经度</label><input type="number" step="0.000001" id="station-lng"></div>
+                    <div class="form-group"><label>纬度</label><input type="number" step="0.000001" id="station-lat"></div>
+                    <div class="form-group"><label>备注</label><input type="text" id="station-remark"></div>
+                    <button class="btn btn-primary" onclick="saveStation()">保存</button>
+                `;
+            } else if (type === 'order') {
+                document.getElementById('modal-body').innerHTML = `
+                    <div class="form-group"><label>起始站ID</label><input type="number" id="order-origin"></div>
+                    <div class="form-group"><label>终止站ID</label><input type="number" id="order-dest"></div>
+                    <div class="form-group"><label>预计收益</label><input type="number" step="0.01" id="order-revenue"></div>
+                    <button class="btn btn-primary" onclick="saveOrder()">保存</button>
+                `;
+            } else if (type === 'assign') {
+                document.getElementById('modal-body').innerHTML = `<p>加载可用车辆中...</p>`;
+                fetch('/api/vehicles/status/巡游中').then(r => r.json()).then(vehicles => {
+                    if (vehicles.length === 0) {
+                        document.getElementById('modal-body').innerHTML = '<p>没有可用的巡游车辆</p>';
+                        return;
+                    }
+                    document.getElementById('modal-body').innerHTML = `
+                        <div class="form-group"><label>选择车辆</label>
+                            <select id="assign-vehicle">${vehicles.map(v => `<option value="${v.id}">${v.id} - ${v.vin}</option>`).join('')}</select>
+                        </div>
+                        <button class="btn btn-primary" onclick="assignOrder('${id}')">派单</button>
+                    `;
+                });
+            }
         }
         
         function closeModal() {
             document.getElementById('modal').classList.remove('show');
         }
         
+        // 显示车辆上电弹窗
+        function showPowerOnModal() {
+            document.getElementById('modal').classList.add('show');
+            document.getElementById('modal-title').textContent = '⚡ 车辆上电';
+            document.getElementById('modal-body').innerHTML = `
+                <div class="form-group">
+                    <label>上电数量</label>
+                    <input type="number" id="power-on-count" value="1" min="1" max="100" style="width: 100%;">
+                </div>
+                <p style="color: #666; font-size: 12px; margin-bottom: 15px;">
+                    将随机选择指定数量的"休息中"车辆，状态改为"巡游中"
+                </p>
+                <button class="btn btn-success" onclick="powerOnVehicles()">确认上电</button>
+            `;
+        }
+        
+        // 执行车辆上电
+        async function powerOnVehicles() {
+            const count = document.getElementById('power-on-count').value;
+            if (!count || count < 1) {
+                alert('请输入有效的上电数量');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/vehicles/power-on?count=${count}`, { method: 'POST' });
+                const actualCount = await response.json();
+                
+                closeModal();
+                
+                if (actualCount === 0) {
+                    alert('没有可上电的车辆（无"休息中"状态的车辆）');
+                } else if (actualCount < count) {
+                    alert(`成功上电 ${actualCount} 辆车辆（实际休息中车辆不足）`);
+                } else {
+                    alert(`成功上电 ${actualCount} 辆车辆`);
+                }
+                
+                loadVehicles();
+                loadStats();
+            } catch (error) {
+                alert('上电失败：' + error.message);
+            }
+        }
+        
+        // 显示模拟订单弹窗
+        function showSimulateModal() {
+            document.getElementById('modal').classList.add('show');
+            document.getElementById('modal-title').textContent = '📊 模拟订单';
+            document.getElementById('modal-body').innerHTML = `
+                <div class="form-group">
+                    <label>订单数量</label>
+                    <input type="number" id="simulate-count" value="10" min="1" max="1000" style="width: 100%;">
+                </div>
+                <p style="color: #666; font-size: 12px; margin-bottom: 15px;">
+                    将随机选择站点作为起止地点，批量创建模拟订单
+                </p>
+                <button class="btn btn-success" onclick="simulateOrders()">确认创建</button>
+            `;
+        }
+        
+        // 执行模拟订单（派单监控页面使用）
+        async function simulateOrders() {
+            const count = document.getElementById('simulate-count').value;
+            if (!count || count < 1) {
+                alert('请输入有效的订单数量');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/order-dispatch/simulate?count=${count}`, { method: 'POST' });
+                const created = await response.json();
+                
+                closeModal();
+                
+                if (created === 0) {
+                    alert('订单创建失败');
+                } else if (created < count) {
+                    alert(`成功创建并派单 ${created} 个订单（部分订单创建失败）`);
+                } else {
+                    alert(`成功创建并派单 ${created} 个订单`);
+                }
+                
+                loadOrders();
+                loadStats();
+                loadOrderDispatchInfo();
+            } catch (error) {
+                alert('创建订单失败：' + error.message);
+            }
+        }
+        
+        // ========== 订单派单相关函数 ==========
+        
+        let orderDispatchVehicles = {}; // { vehicleId: { marker, path, currentIndex, progress, status, animating } }
+        let orderDispatchAnimationTimer = null;
+        
+        /**
+         * 启动订单派单信息更新和动画
+         */
+        function startOrderDispatchUpdate() {
+            // 初始加载
+            loadOrderDispatchInfo();
+            
+            // 每5秒检查是否有新的派单任务
+            orderDispatchUpdateInterval = setInterval(() => {
+                loadOrderDispatchInfo();
+            }, 5000);
+        }
+        
+        /**
+         * 加载订单派单信息并启动动画
+         */
+        async function loadOrderDispatchInfo() {
+            try {
+                const data = await fetch('/api/order-dispatch/info').then(r => r.json());
+                
+                // 更新表格
+                const tbody = document.querySelector('#order-dispatch-table tbody');
+                tbody.innerHTML = data.map(d => {
+                    const progress = d.pickupProgress !== undefined ? d.pickupProgress : (d.deliveryProgress || 0);
+                    const routeType = d.status === '接乘中' ? '前往接乘点' : '履约中';
+                    const progressColor = routeType === '前往接乘点' ? '#fa8c16' : '#52c41a';
+                    
+                    return `
+                    <tr>
+                        <td>${d.vehicleId}</td>
+                        <td>${d.vin}</td>
+                        <td>${d.orderId || '-'}</td>
+                        <td><span class="badge ${getBadgeClass(d.status)}">${d.status}</span></td>
+                        <td>${routeType}</td>
+                        <td>
+                            <div style="background: #f0f0f0; border-radius: 4px; height: 20px; overflow: hidden;">
+                                <div style="background: ${progressColor}; width: ${progress}%; height: 100%; transition: width 0.1s;"></div>
+                            </div>
+                            <small>${progress}%</small>
+                        </td>
+                        <td>${d.originStationName || d.originStationId || '-'}</td>
+                        <td>${d.destStationName || d.destStationId || '-'}</td>
+                    </tr>
+                `}).join('');
+                
+                // 更新统计数字（接乘中+履约中的车辆总数）
+                document.getElementById('stat-dispatch').textContent = data.length;
+                
+                // 同步派单车辆状态
+                syncOrderDispatchVehicles(data);
+                
+            } catch (error) {
+                console.error('加载派单信息失败', error);
+            }
+        }
+        
+        /**
+         * 同步派单车辆状态
+         */
+        function syncOrderDispatchVehicles(data) {
+            const currentVehicleIds = new Set(Object.keys(orderDispatchVehicles));
+            const newVehicleIds = new Set(data.map(d => d.vehicleId));
+            
+                // 移除已完成的车辆
+                currentVehicleIds.forEach(id => {
+                    if (!newVehicleIds.has(id)) {
+                        const vehicle = orderDispatchVehicles[id];
+                        if (vehicle.marker) orderDispatchMap.remove(vehicle.marker);
+                        if (vehicle.polyline) orderDispatchMap.remove(vehicle.polyline);
+                        if (vehicle.destMarker) orderDispatchMap.remove(vehicle.destMarker);
+                        if (vehicle.originMarker) orderDispatchMap.remove(vehicle.originMarker);
+                        delete orderDispatchVehicles[id];
+                    }
+                });
+            
+            // 添加或更新派单车辆
+            data.forEach(d => {
+                const path = d.pickupPath || d.deliveryPath;
+                
+                if (!orderDispatchVehicles[d.vehicleId] && path && path.length > 0) {
+                    // 创建车辆标记
+                    const markerColor = d.status === '接乘中' ? '#fa8c16' : '#52c41a';
+                    const marker = new AMap.Marker({
+                        position: [path[0][0], path[0][1]],
+                        content: `<div style="background: ${markerColor}; color: white; padding: 6px 10px; border-radius: 4px; font-size: 13px; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
+                            🚗 ${d.vehicleId} <span style="font-size: 11px;">(${d.status})</span>
+                        </div>`,
+                        offset: new AMap.Pixel(-15, -15),
+                        autoRotation: true
+                    });
+                    orderDispatchMap.add(marker);
+                    
+                    // 创建路线
+                    const polyline = new AMap.Polyline({
+                        path: path,
+                        strokeColor: markerColor,
+                        strokeWeight: 5,
+                        strokeOpacity: 0.8
+                    });
+                    orderDispatchMap.add(polyline);
+                    
+                    // 创建起点标记（接乘点）
+                    let originMarker = null;
+                    if (d.originLongitude && d.originLatitude) {
+                        originMarker = new AMap.Marker({
+                            position: [d.originLongitude, d.originLatitude],
+                            content: `<div style="background: #1890ff; color: white; padding: 6px 10px; border-radius: 4px; font-size: 13px; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
+                                📍 ${d.originStationName || '起点'}
+                            </div>`,
+                            offset: new AMap.Pixel(-15, -15)
+                        });
+                        orderDispatchMap.add(originMarker);
+                    }
+                    
+                    // 创建终点标记
+                    let destMarker = null;
+                    if (d.destLongitude && d.destLatitude) {
+                        destMarker = new AMap.Marker({
+                            position: [d.destLongitude, d.destLatitude],
+                            content: `<div style="background: #52c41a; color: white; padding: 6px 10px; border-radius: 4px; font-size: 13px; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
+                                🎯 ${d.destStationName || '终点'}
+                            </div>`,
+                            offset: new AMap.Pixel(-15, -15)
+                        });
+                        orderDispatchMap.add(destMarker);
+                    }
+                    
+                    // 保存车辆状态
+                    orderDispatchVehicles[d.vehicleId] = {
+                        marker,
+                        polyline,
+                        originMarker,
+                        destMarker,
+                        path: path,
+                        currentIndex: 0,
+                        progress: d.pickupProgress !== undefined ? d.pickupProgress : (d.deliveryProgress || 0),
+                        status: d.status,
+                        animating: true,
+                        vehicleId: d.vehicleId
+                    };
+                    
+                    // 适应地图视野
+                    orderDispatchMap.setFitView([polyline], false, [50, 50, 50, 50]);
+                } else if (orderDispatchVehicles[d.vehicleId]) {
+                    // 更新现有车辆的状态和进度
+                    const vehicle = orderDispatchVehicles[d.vehicleId];
+                    vehicle.progress = d.pickupProgress !== undefined ? d.pickupProgress : (d.deliveryProgress || 0);
+                    vehicle.status = d.status;
+                }
+            });
+            
+            // 启动动画循环
+            if (!orderDispatchAnimationTimer && Object.keys(orderDispatchVehicles).length > 0) {
+                startOrderDispatchAnimation();
+            }
+        }
+        
+        /**
+         * 启动订单派单动画循环
+         */
+        function startOrderDispatchAnimation() {
+            const intervalMs = 50;
+            const progressPerSecond = 2; // 每秒进度增加2%
+            
+            orderDispatchAnimationTimer = setInterval(() => {
+                const vehiclesToRemove = [];
+                
+                Object.values(orderDispatchVehicles).forEach(vehicle => {
+                    if (!vehicle.animating || !vehicle.path || vehicle.path.length === 0) return;
+                    
+                    // 更新进度
+                    vehicle.progress += progressPerSecond * (intervalMs / 1000);
+                    
+                    if (vehicle.progress >= 100) {
+                        vehicle.progress = 100;
+                        vehicle.animating = false;
+                        vehiclesToRemove.push(vehicle.vehicleId);
+                        return;
+                    }
+                    
+                    // 计算当前位置索引
+                    const totalPoints = vehicle.path.length;
+                    const currentIndex = Math.floor((vehicle.progress / 100) * (totalPoints - 1));
+                    
+                    if (currentIndex < totalPoints) {
+                        const pos = vehicle.path[currentIndex];
+                        if (vehicle.marker && pos.length >= 2) {
+                            vehicle.marker.setPosition([pos[0], pos[1]]);
+                            
+                            // 计算角度
+                            if (currentIndex < totalPoints - 1) {
+                                const nextPos = vehicle.path[currentIndex + 1];
+                                const angle = Math.atan2(nextPos[1] - pos[1], nextPos[0] - pos[0]) * 180 / Math.PI;
+                                vehicle.marker.setAngle(angle);
+                            }
+                        }
+                    }
+                    
+                    // 更新标记显示进度
+                    if (vehicle.marker) {
+                        const markerColor = vehicle.status === '接乘中' ? '#fa8c16' : '#52c41a';
+                        vehicle.marker.setContent(`<div style="background: ${markerColor}; color: white; padding: 6px 10px; border-radius: 4px; font-size: 13px; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
+                            🚗 ${vehicle.vehicleId} <span style="font-size: 11px;">(${Math.round(vehicle.progress)}%)</span>
+                        </div>`);
+                    }
+                });
+                
+                // 处理到达的车辆
+                vehiclesToRemove.forEach(vehicleId => {
+                    const vehicle = orderDispatchVehicles[vehicleId];
+                    if (vehicle.status === '接乘中') {
+                        // 到达接乘点，通知后端
+                        notifyVehicleArrivedPickup(vehicleId);
+                    } else if (vehicle.status === '履约中') {
+                        // 到达目的地，通知后端
+                        notifyVehicleArrivedDestination(vehicleId);
+                    }
+                });
+                
+            }, intervalMs);
+        }
+        
+        /**
+         * 通知后端车辆到达接乘点
+         */
+        async function notifyVehicleArrivedPickup(vehicleId) {
+            try {
+                await fetch(`/api/order-dispatch/arrived-pickup/${vehicleId}`, { method: 'POST' });
+                console.log(`车辆 ${vehicleId} 已到达接乘点`);
+                
+                // 清理本地状态（车辆将重新开始履约）
+                const vehicle = orderDispatchVehicles[vehicleId];
+                if (vehicle) {
+                    if (vehicle.marker) orderDispatchMap.remove(vehicle.marker);
+                    if (vehicle.polyline) orderDispatchMap.remove(vehicle.polyline);
+                    delete orderDispatchVehicles[vehicleId];
+                }
+                
+                loadStats();
+            } catch (error) {
+                console.error(`通知车辆到达接乘点失败: ${vehicleId}`, error);
+            }
+        }
+        
+        /**
+         * 通知后端车辆到达目的地
+         */
+        async function notifyVehicleArrivedDestination(vehicleId) {
+            try {
+                await fetch(`/api/order-dispatch/arrived-destination/${vehicleId}`, { method: 'POST' });
+                console.log(`车辆 ${vehicleId} 已到达目的地`);
+                
+                // 清理本地状态
+                const vehicle = orderDispatchVehicles[vehicleId];
+                if (vehicle) {
+                    if (vehicle.marker) orderDispatchMap.remove(vehicle.marker);
+                    if (vehicle.polyline) orderDispatchMap.remove(vehicle.polyline);
+                    if (vehicle.originMarker) orderDispatchMap.remove(vehicle.originMarker);
+                    if (vehicle.destMarker) orderDispatchMap.remove(vehicle.destMarker);
+                    delete orderDispatchVehicles[vehicleId];
+                }
+                
+                loadStats();
+            } catch (error) {
+                console.error(`通知车辆到达目的地失败: ${vehicleId}`, error);
+            }
+        }
+        
+        /**
+         * 显示派单车辆在地图上
+         */
+        async function showOrderDispatchOnMap() {
+            hideAllFilters();
+            clearOverviewMarkers();
+            highlightCard('dispatch');
+            
+            const data = await fetch('/api/order-dispatch/info').then(r => r.json());
+            
+            data.forEach(d => {
+                const path = d.pickupPath || d.deliveryPath;
+                if (path && path.length > 0) {
+                    const markerColor = d.status === '接乘中' ? '#fa8c16' : '#52c41a';
+                    const marker = new AMap.Marker({
+                        position: [d.longitude, d.latitude],
+                        content: `<div style="background: ${markerColor}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,0.3);">
+                            🚗 ${d.vehicleId} (${d.status})
+                        </div>`,
+                        offset: new AMap.Pixel(-15, -15)
+                    });
+                    map.add(marker);
+                    overviewMarkers.push(marker);
+                    
+                    const polyline = new AMap.Polyline({
+                        path: path,
+                        strokeColor: markerColor,
+                        strokeWeight: 4,
+                        strokeOpacity: 0.8
+                    });
+                    map.add(polyline);
+                    overviewMarkers.push(polyline);
+                }
+            });
+            // 不自动缩放地图
+        }
+        
+        /**
+         * 手动触发订单派单
+         */
+        async function triggerOrderDispatch() {
+            try {
+                const response = await fetch('/api/order-dispatch/trigger', { method: 'POST' });
+                const msg = await response.text();
+                alert(msg);
+                loadOrderDispatchInfo();
+                loadStats();
+            } catch (error) {
+                alert('触发派单失败：' + error.message);
+            }
+        }
+        
+        // 停车场编辑
+        async function editParkingLot(id) {
+            const data = await fetch(`/api/parking-lots/${id}`).then(r => r.json());
+            showModal('parking');
+            document.getElementById('modal-title').textContent = '编辑停车场';
+            document.getElementById('parking-name').value = data.name;
+            document.getElementById('parking-gis').value = data.gisGrid;
+            document.getElementById('parking-capacity').value = data.capacity;
+            document.getElementById('parking-lng').value = data.longitude;
+            document.getElementById('parking-lat').value = data.latitude;
+            document.querySelector('#modal-body .btn-primary').onclick = () => saveParkingLot(id);
+        }
+        
+        async function saveParkingLot(id) {
+            const body = {
+                name: document.getElementById('parking-name').value,
+                gisGrid: document.getElementById('parking-gis').value,
+                capacity: parseInt(document.getElementById('parking-capacity').value),
+                longitude: parseFloat(document.getElementById('parking-lng').value),
+                latitude: parseFloat(document.getElementById('parking-lat').value)
+            };
+            const url = id ? `/api/parking-lots/${id}` : '/api/parking-lots';
+            const method = id ? 'PUT' : 'POST';
+            await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            closeModal();
+            loadParkingLots();
+        }
+        
+        // 车辆编辑
+        async function editVehicle(id) {
+            const data = await fetch(`/api/vehicles/${id}`).then(r => r.json());
+            showModal('vehicle');
+            document.getElementById('modal-title').textContent = '编辑车辆';
+            document.getElementById('vehicle-vin').value = data.vin;
+            document.getElementById('vehicle-status').value = data.status;
+            document.getElementById('vehicle-battery').value = data.batteryPercent;
+            document.getElementById('vehicle-lng').value = data.longitude;
+            document.getElementById('vehicle-lat').value = data.latitude;
+            document.querySelector('#modal-body .btn-primary').onclick = () => saveVehicle(id);
+        }
+        
+        async function saveVehicle(id) {
+            const body = {
+                vin: document.getElementById('vehicle-vin').value,
+                status: document.getElementById('vehicle-status').value,
+                batteryPercent: parseInt(document.getElementById('vehicle-battery').value),
+                longitude: parseFloat(document.getElementById('vehicle-lng').value),
+                latitude: parseFloat(document.getElementById('vehicle-lat').value)
+            };
+            const url = id ? `/api/vehicles/${id}` : '/api/vehicles';
+            const method = id ? 'PUT' : 'POST';
+            await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            closeModal();
+            loadVehicles();
+        }
+        
+        // 站点编辑
+        async function editStation(id) {
+            const data = await fetch(`/api/stations/${id}`).then(r => r.json());
+            showModal('station');
+            document.getElementById('modal-title').textContent = '编辑站点';
+            document.getElementById('station-name').value = data.name;
+            document.getElementById('station-type').value = data.type;
+            document.getElementById('station-lng').value = data.longitude;
+            document.getElementById('station-lat').value = data.latitude;
+            document.getElementById('station-remark').value = data.remark || '';
+            document.querySelector('#modal-body .btn-primary').onclick = () => saveStation(id);
+        }
+        
+        async function saveStation(id) {
+            const body = {
+                name: document.getElementById('station-name').value,
+                type: document.getElementById('station-type').value,
+                longitude: parseFloat(document.getElementById('station-lng').value),
+                latitude: parseFloat(document.getElementById('station-lat').value),
+                remark: document.getElementById('station-remark').value
+            };
+            const url = id ? `/api/stations/${id}` : '/api/stations';
+            const method = id ? 'PUT' : 'POST';
+            await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            closeModal();
+            loadStations();
+        }
+        
+        // 订单新增
+        async function saveOrder() {
+            const body = {
+                originStationId: parseInt(document.getElementById('order-origin').value),
+                destinationStationId: parseInt(document.getElementById('order-dest').value),
+                estimatedRevenue: parseFloat(document.getElementById('order-revenue').value)
+            };
+            await fetch('/api/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            closeModal();
+            loadOrders();
+        }
+        
+        // 派单
+        async function assignOrder(orderId) {
+            const vehicleId = document.getElementById('assign-vehicle').value;
+            await fetch(`/api/orders/${orderId}/assign/${vehicleId}`, { method: 'POST' });
+            closeModal();
+            loadOrders();
+            loadVehicles();
+        }
+        
         function getBadgeClass(status) {
-            const map = { '履约中': 'badge-success', '巡游中': 'badge-info', '维护中': 'badge-warning', '待派单': 'badge-info', '已完成': 'badge-success', '已取消': 'badge-danger' };
+            const map = { '巡游中': 'badge-info', '调度中': 'badge-warning', '接乘中': 'badge-warning', '履约中': 'badge-success', '维护中': 'badge-warning', '休息中': 'badge-danger', '待派单': 'badge-info', '待接乘': 'badge-warning', '进行中': 'badge-success', '已完成': 'badge-success', '已取消': 'badge-danger' };
             return map[status] || 'badge-info';
         }
         

@@ -1,11 +1,11 @@
-package org.example.service;
+package org.example.service.impl;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.example.dto.RouteRequest;
 import org.example.dto.RouteResponse;
-import org.springframework.stereotype.Service;
+import org.example.service.RouteService;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 

@@ -1,4 +1,4 @@
-package org.example.service;
+package org.example.service.impl;
 
 import org.example.entity.Vehicle;
 import org.example.repository.VehicleRepository;
@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Random;
@@ -72,6 +73,42 @@ public class VehicleService {
         return vehicleRepository.findByGisGrid(gisGrid);
     }
 
+    /**
+     * 综合查询车辆
+     * @param vin VIN码（模糊匹配，可选）
+     * @param gisGrid 网格（可选）
+     * @param minBattery 最小电量（可选）
+     * @param maxBattery 最大电量（可选）
+     */
+    public List<Vehicle> search(String vin, String gisGrid, Integer minBattery, Integer maxBattery) {
+        // 设置默认值
+        if (minBattery == null) minBattery = 0;
+        if (maxBattery == null) maxBattery = 100;
+
+        boolean hasVin = vin != null && !vin.trim().isEmpty();
+        boolean hasGisGrid = gisGrid != null && !gisGrid.trim().isEmpty();
+        boolean hasBatteryFilter = minBattery > 0 || maxBattery < 100;
+
+        // 根据条件组合选择合适的查询方法
+        if (hasVin && hasGisGrid && hasBatteryFilter) {
+            return vehicleRepository.findByVinContainingAndGisGridAndBatteryPercentBetween(vin.trim(), gisGrid, minBattery, maxBattery);
+        } else if (hasVin && hasGisGrid) {
+            return vehicleRepository.findByVinContainingAndGisGrid(vin.trim(), gisGrid);
+        } else if (hasVin && hasBatteryFilter) {
+            return vehicleRepository.findByVinContainingAndBatteryPercentBetween(vin.trim(), minBattery, maxBattery);
+        } else if (hasGisGrid && hasBatteryFilter) {
+            return vehicleRepository.findByGisGridAndBatteryPercentBetween(gisGrid, minBattery, maxBattery);
+        } else if (hasVin) {
+            return vehicleRepository.findByVinContaining(vin.trim());
+        } else if (hasGisGrid) {
+            return vehicleRepository.findByGisGrid(gisGrid);
+        } else if (hasBatteryFilter) {
+            return vehicleRepository.findByBatteryPercentBetween(minBattery, maxBattery);
+        } else {
+            return vehicleRepository.findAll();
+        }
+    }
+
     @Transactional
     public Vehicle update(String id, Vehicle updated) {
         return vehicleRepository.findById(id).map(existing -> {
@@ -111,6 +148,37 @@ public class VehicleService {
             throw new IllegalArgumentException("车辆正在履约，无法删除");
         }
         vehicleRepository.deleteById(id);
+    }
+
+    /**
+     * 批量上电：随机选择n辆"休息中"状态的车辆，改为"巡游中"
+     * @param count 上电数量
+     * @return 实际上电的车辆数量
+     */
+    @Transactional
+    public int powerOnVehicles(int count) {
+        if (count <= 0) {
+            throw new IllegalArgumentException("上电数量必须大于0");
+        }
+        
+        // 查询所有休息中的车辆
+        List<Vehicle> restingVehicles = vehicleRepository.findByStatus(Vehicle.VehicleStatus.休息中);
+        
+        if (restingVehicles.isEmpty()) {
+            return 0;
+        }
+        
+        // 随机选择指定数量的车辆
+        Collections.shuffle(restingVehicles);
+        int actualCount = Math.min(count, restingVehicles.size());
+        
+        for (int i = 0; i < actualCount; i++) {
+            Vehicle vehicle = restingVehicles.get(i);
+            vehicle.setStatus(Vehicle.VehicleStatus.巡游中);
+            vehicleRepository.save(vehicle);
+        }
+        
+        return actualCount;
     }
 
     private void validateVin(String vin) {

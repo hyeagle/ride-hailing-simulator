@@ -28,6 +28,19 @@ spring:
       enabled: true
       path: /h2-console
 
+# 调度配置
+dispatch:
+  enabled: true
+  interval-ms: 120000  # 2分钟 = 120000毫秒
+  speed-kmh: 30        # 车辆行驶速度 30km/h
+
+# 订单派单配置
+order-dispatch:
+  enabled: true
+  interval-ms: 120000      # 2分钟 = 120000毫秒
+  pickup-speed-kmh: 30     # 接乘速度 30km/h
+  delivery-speed-kmh: 40   # 履约速度 40km/h
+
 logging:
   level:
     root: INFO

@@ -1,4 +1,4 @@
-package org.example.service;
+package org.example.service.impl;
 
 import org.example.entity.Order;
 import org.example.entity.Station;
@@ -88,7 +88,7 @@ public class OrderService {
         }
 
         order.setVehicleId(vehicleId);
-        order.setStatus(Order.OrderStatus.履约中);
+        order.setStatus(Order.OrderStatus.进行中);
         vehicle.setStatus(Vehicle.VehicleStatus.履约中);
         vehicle.setOrderId(orderId);
 
@@ -110,8 +110,17 @@ public class OrderService {
 
         order.setStatus(Order.OrderStatus.已完成);
         order.setActualArrivalTime(LocalDateTime.now());
+        
+        // 重置车辆状态为巡游中
         vehicle.setStatus(Vehicle.VehicleStatus.巡游中);
         vehicle.setOrderId(null);
+        
+        // 清理派单相关字段
+        vehicle.setPickupPath(null);
+        vehicle.setPickupProgress(null);
+        vehicle.setDeliveryPath(null);
+        vehicle.setDeliveryProgress(null);
+        vehicle.setDispatchOrderStartTime(null);
 
         vehicleRepository.save(vehicle);
         return orderRepository.save(order);
@@ -129,8 +138,18 @@ public class OrderService {
         if (order.getVehicleId() != null) {
             Vehicle vehicle = vehicleRepository.findById(order.getVehicleId())
                     .orElseThrow(() -> new IllegalArgumentException("车辆不存在: " + order.getVehicleId()));
+            
+            // 重置车辆状态为巡游中
             vehicle.setStatus(Vehicle.VehicleStatus.巡游中);
             vehicle.setOrderId(null);
+            
+            // 清理派单相关字段
+            vehicle.setPickupPath(null);
+            vehicle.setPickupProgress(null);
+            vehicle.setDeliveryPath(null);
+            vehicle.setDeliveryProgress(null);
+            vehicle.setDispatchOrderStartTime(null);
+            
             vehicleRepository.save(vehicle);
         }
 
@@ -170,5 +189,58 @@ public class OrderService {
                         Math.sin(dLng / 2) * Math.sin(dLng / 2);
         double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         return earthRadius * c;
+    }
+
+    /**
+     * 批量模拟创建订单（公共方法，供其他服务调用）
+     * @param count 订单数量
+     * @return 实际创建的订单数量
+     */
+    @Transactional
+    public int simulateOrders(int count) {
+        if (count <= 0) {
+            throw new IllegalArgumentException("订单数量必须大于0");
+        }
+
+        List<Station> stations = stationRepository.findAll();
+        if (stations.size() < 2) {
+            throw new IllegalArgumentException("站点数量不足，至少需要2个站点");
+        }
+
+        int created = 0;
+        for (int i = 0; i < count; i++) {
+            try {
+                // 随机选择起点和终点（不能相同）
+                Station origin, destination;
+                do {
+                    origin = stations.get((int) (Math.random() * stations.size()));
+                    destination = stations.get((int) (Math.random() * stations.size()));
+                } while (origin.getId().equals(destination.getId()));
+
+                // 创建订单
+                Order order = Order.builder()
+                        .originStationId(origin.getId())
+                        .destinationStationId(destination.getId())
+                        .startTime(LocalDateTime.now())
+                        .status(Order.OrderStatus.待派单)
+                        .build();
+
+                // 计算预计到达时间和收益
+                int durationMinutes = calculateEstimatedDuration(origin, destination);
+                order.setEstimatedArrivalTime(order.getStartTime().plusMinutes(durationMinutes));
+                order.setEstimatedRevenue(calculateRevenue(origin, destination));
+
+                // 生成订单ID
+                order.setId(generateOrderId(order.getStartTime()));
+
+                orderRepository.save(order);
+                created++;
+            } catch (Exception e) {
+                log.error("创建模拟订单失败", e);
+            }
+        }
+
+        log.info("成功创建{}个模拟订单", created);
+        return created;
     }
 }
