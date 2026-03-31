@@ -288,12 +288,51 @@ async function triggerOrderDispatch() {
 let vehicleDispatchVehicles = {};
 let vehicleDispatchAnimationTimer = null;
 
-// 启动车辆调度更新
+// 启动车辆调度表格刷新（只刷新显示，不调用后端接口）
+let vehicleDispatchTableRefreshTimer = null;
+
 function startVehicleDispatchUpdate() {
-    loadVehicleDispatchInfo();
-    vehicleDispatchUpdateInterval = setInterval(() => {
-        loadVehicleDispatchInfo();
-    }, 5000);
+    // 启动表格刷新定时器
+    if (!vehicleDispatchTableRefreshTimer) {
+        vehicleDispatchTableRefreshTimer = setInterval(() => {
+            refreshVehicleDispatchTable();
+        }, 500);
+    }
+}
+
+// 刷新表格显示（使用前端缓存的进度数据）
+function refreshVehicleDispatchTable() {
+    if (Object.keys(vehicleDispatchVehicles).length === 0) return;
+    
+    const tbody = document.querySelector('#vehicle-dispatch-table tbody');
+    if (!tbody) return;
+    
+    // 直接用缓存数据重新渲染表格
+    const mockData = Object.values(vehicleDispatchVehicles).map(v => ({
+        vehicleId: v.vehicleId,
+        vin: v.vin || '-',
+        targetStationName: v.targetStationName || v.targetStationId || '-',
+        progress: v.progress,
+        startTime: v.startTime
+    }));
+    
+    tbody.innerHTML = mockData.map(d => {
+        const displayProgress = Math.round(d.progress);
+        return `
+        <tr>
+            <td>${d.vehicleId}</td>
+            <td>${d.vin}</td>
+            <td>${d.targetStationName}</td>
+            <td>
+                <div style="background: #f0f0f0; border-radius: 4px; height: 20px; overflow: hidden;">
+                    <div style="background: linear-gradient(90deg, #52c41a, #1890ff); width: ${displayProgress}%; height: 100%; transition: width 0.1s;"></div>
+                </div>
+                <small>${displayProgress}%</small>
+            </td>
+            <td>${d.startTime ? new Date(d.startTime).toLocaleString('zh-CN') : '-'}</td>
+            <td><span class="badge badge-warning">调度中</span></td>
+        </tr>
+    `}).join('');
 }
 
 // 加载车辆调度信息
@@ -349,7 +388,12 @@ function syncVehicleDispatchVehicles(data) {
                 currentIndex: 0,
                 progress: d.progress || 0,
                 animating: true,
-                vehicleId: d.vehicleId
+                vehicleId: d.vehicleId,
+                // 缓存显示所需字段
+                vin: d.vin,
+                targetStationName: d.targetStationName,
+                targetStationId: d.targetStationId,
+                startTime: d.startTime
             };
         }
     });

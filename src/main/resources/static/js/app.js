@@ -15,9 +15,12 @@ document.addEventListener('DOMContentLoaded', () => {
     loadVehicles();
     loadStations();
     loadOrders();
-    startOrderDispatchUpdate();
+    // 只加载一次数据，不循环调用dispatch/info接口
+    loadOrderDispatchInfo();
+    loadVehicleDispatchInfo();
+    loadOverviewDispatchInfo();
+    // 启动表格刷新定时器（只刷新显示，不调用后端）
     startVehicleDispatchUpdate();
-    startOverviewDispatchAnimation();
     
     // 页面加载后默认显示车辆
     setTimeout(() => {

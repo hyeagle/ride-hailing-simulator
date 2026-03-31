@@ -160,6 +160,29 @@ function getSelectedVehicleStatuses() {
 
 function filterVehiclesByStatus() {
     refreshOverviewMap();
+    // 同步更新调度中车辆标记的可见性
+    updateDispatchVehiclesVisibility();
+}
+
+// 更新调度中车辆标记的可见性
+function updateDispatchVehiclesVisibility() {
+    const dispatchCheckbox = document.getElementById('filter-调度中');
+    const showDispatchVehicles = dispatchCheckbox && dispatchCheckbox.checked;
+    
+    Object.values(overviewDispatchVehicles).forEach(vehicle => {
+        if (vehicle.marker) {
+            vehicle.marker.setOptions({ visible: showDispatchVehicles });
+        }
+        if (vehicle.polyline && vehicle.routeVisible) {
+            vehicle.polyline.setOptions({ visible: showDispatchVehicles });
+        }
+        if (vehicle.destMarker) {
+            vehicle.destMarker.setOptions({ visible: showDispatchVehicles });
+        }
+        if (vehicle.originMarker) {
+            vehicle.originMarker.setOptions({ visible: showDispatchVehicles });
+        }
+    });
 }
 
 function selectAllVehicleStatus() {
