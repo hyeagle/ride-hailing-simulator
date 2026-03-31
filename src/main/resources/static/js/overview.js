@@ -2,11 +2,15 @@
  * 概览页地图模块
  */
 
-let selectedTypes = new Set();
 let overviewMarkers = [];
 let overviewDispatchVehicles = {};
 let overviewDispatchAnimationTimer = null;
 let overviewDispatchUpdateInterval = null;
+let cachedParkingData = null;
+let cachedStationData = null;
+let cachedVehicleData = null;
+let cachedOrderData = null;
+let cachedOrderStationData = null;
 
 // 清除概览地图上的标记
 function clearOverviewMarkers() {
@@ -14,68 +18,200 @@ function clearOverviewMarkers() {
     overviewMarkers = [];
 }
 
-// 高亮卡片（多选）
-function highlightCard(type) {
-    if (selectedTypes.has(type)) {
-        selectedTypes.delete(type);
-    } else {
-        selectedTypes.add(type);
-    }
-    document.querySelectorAll('.stat-card').forEach(c => c.classList.remove('active'));
-    selectedTypes.forEach(t => {
-        document.getElementById('card-' + t)?.classList.add('active');
-    });
+// 加载所有数据
+async function loadAllOverviewData() {
+    const [parking, stations, vehicles, orders, orderStations] = await Promise.all([
+        API.getParkingLots(),
+        API.getStations(),
+        API.getVehicles(),
+        API.getOrders(),
+        API.getStations()
+    ]);
+    cachedParkingData = parking;
+    cachedStationData = stations;
+    cachedVehicleData = vehicles;
+    cachedOrderData = orders;
+    cachedOrderStationData = orderStations;
 }
 
 // 刷新地图显示
 async function refreshOverviewMap() {
-    hideAllFilters();
-    
-    const promises = [];
-    if (selectedTypes.has('parking')) promises.push(API.getParkingLots());
-    else promises.push(Promise.resolve(null));
-    
-    if (selectedTypes.has('vehicles')) promises.push(API.getVehicles());
-    else promises.push(Promise.resolve(null));
-    
-    if (selectedTypes.has('stations')) promises.push(API.getStations());
-    else promises.push(Promise.resolve(null));
-    
-    if (selectedTypes.has('orders')) {
-        promises.push(API.getOrders());
-        promises.push(API.getStations());
-    } else {
-        promises.push(Promise.resolve(null));
-        promises.push(Promise.resolve(null));
+    // 加载数据（如果尚未加载）
+    if (!cachedParkingData || !cachedStationData || !cachedVehicleData || !cachedOrderData) {
+        await loadAllOverviewData();
     }
     
-    const [parkingData, vehicleData, stationData, orderData, orderStationData] = await Promise.all(promises);
+    // 清除所有标记
+    clearOverviewMarkers();
     
-    const typesToRefresh = ['parking', 'vehicles', 'stations', 'orders'];
-    typesToRefresh.forEach(type => {
-        const oldMarkers = overviewMarkers.filter(m => m.getExtData?.() === type);
-        oldMarkers.forEach(m => window.map.remove(m));
-        overviewMarkers = overviewMarkers.filter(m => m.getExtData?.() !== type);
-    });
+    // 获取筛选条件
+    const parkingStatuses = getSelectedParkingStatuses();
+    const stationTypes = getSelectedStationTypes();
+    const vehicleStatuses = getSelectedVehicleStatuses();
+    const orderStatuses = getSelectedOrderStatuses();
     
-    if (selectedTypes.has('parking') && parkingData) {
-        renderParkingLotMarkers(parkingData);
+    // 渲染停车场
+    if (parkingStatuses.length > 0 && cachedParkingData) {
+        // 假设停车场有status字段，如果没有则默认显示全部
+        const filteredParking = cachedParkingData.filter(p => {
+            if (!p.status) return true;
+            return parkingStatuses.includes(p.status);
+        });
+        renderParkingLotMarkers(filteredParking);
     }
-    if (selectedTypes.has('vehicles') && vehicleData) {
-        const selectedStatuses = getSelectedVehicleStatuses();
-        const filteredVehicles = vehicleData.filter(v => selectedStatuses.includes(v.status));
+    
+    // 渲染站点
+    if (stationTypes.length > 0 && cachedStationData) {
+        const filteredStations = cachedStationData.filter(s => stationTypes.includes(s.type));
+        renderStationMarkers(filteredStations.slice(0, 200));
+    }
+    
+    // 渲染车辆
+    if (vehicleStatuses.length > 0 && cachedVehicleData) {
+        const filteredVehicles = cachedVehicleData.filter(v => vehicleStatuses.includes(v.status));
         renderVehicleMarkers(filteredVehicles, false);
-        document.getElementById('vehicle-map-filter').classList.add('show');
     }
-    if (selectedTypes.has('stations') && stationData) {
-        renderStationMarkers(stationData.slice(0, 200));
-        document.getElementById('station-map-filter').classList.add('show');
-    }
-    if (selectedTypes.has('orders') && orderData && orderStationData) {
-        renderOrderMarkers(orderData, orderStationData);
-        document.getElementById('order-map-filter').classList.add('show');
+    
+    // 渲染订单
+    if (orderStatuses.length > 0 && cachedOrderData && cachedOrderStationData) {
+        const filteredOrders = cachedOrderData.filter(o => orderStatuses.includes(o.status));
+        renderOrderMarkers(filteredOrders, cachedOrderStationData);
     }
 }
+
+// ===== 停车场筛选 =====
+
+function getSelectedParkingStatuses() {
+    const statuses = [];
+    ['使用中', '未启用'].forEach(s => {
+        const checkbox = document.getElementById('filter-parking-' + s);
+        if (checkbox && checkbox.checked) {
+            statuses.push(s);
+        }
+    });
+    return statuses;
+}
+
+function filterParkingByStatus() {
+    refreshOverviewMap();
+}
+
+function selectAllParkingStatus() {
+    ['使用中', '未启用'].forEach(s => {
+        const checkbox = document.getElementById('filter-parking-' + s);
+        if (checkbox) checkbox.checked = true;
+    });
+    filterParkingByStatus();
+}
+
+function deselectAllParkingStatus() {
+    ['使用中', '未启用'].forEach(s => {
+        const checkbox = document.getElementById('filter-parking-' + s);
+        if (checkbox) checkbox.checked = false;
+    });
+    filterParkingByStatus();
+}
+
+// ===== 站点筛选 =====
+
+function getSelectedStationTypes() {
+    const types = [];
+    ['商圈', '景区', '医院', '社区', '交通枢纽'].forEach(t => {
+        const checkbox = document.getElementById('filter-station-' + t);
+        if (checkbox && checkbox.checked) {
+            types.push(t);
+        }
+    });
+    return types;
+}
+
+function filterStationsByType() {
+    refreshOverviewMap();
+}
+
+function selectAllStationTypes() {
+    ['商圈', '景区', '医院', '社区', '交通枢纽'].forEach(t => {
+        const checkbox = document.getElementById('filter-station-' + t);
+        if (checkbox) checkbox.checked = true;
+    });
+    filterStationsByType();
+}
+
+function deselectAllStationTypes() {
+    ['商圈', '景区', '医院', '社区', '交通枢纽'].forEach(t => {
+        const checkbox = document.getElementById('filter-station-' + t);
+        if (checkbox) checkbox.checked = false;
+    });
+    filterStationsByType();
+}
+
+// ===== 车辆筛选 =====
+
+function getSelectedVehicleStatuses() {
+    const statuses = [];
+    ['巡游中', '调度中', '接乘中', '履约中', '维护中', '休息中'].forEach(s => {
+        const checkbox = document.getElementById('filter-' + s);
+        if (checkbox && checkbox.checked) {
+            statuses.push(s);
+        }
+    });
+    return statuses;
+}
+
+function filterVehiclesByStatus() {
+    refreshOverviewMap();
+}
+
+function selectAllVehicleStatus() {
+    ['巡游中', '调度中', '接乘中', '履约中', '维护中', '休息中'].forEach(s => {
+        const checkbox = document.getElementById('filter-' + s);
+        if (checkbox) checkbox.checked = true;
+    });
+    filterVehiclesByStatus();
+}
+
+function deselectAllVehicleStatus() {
+    ['巡游中', '调度中', '接乘中', '履约中', '维护中', '休息中'].forEach(s => {
+        const checkbox = document.getElementById('filter-' + s);
+        if (checkbox) checkbox.checked = false;
+    });
+    filterVehiclesByStatus();
+}
+
+// ===== 订单筛选 =====
+
+function getSelectedOrderStatuses() {
+    const statuses = [];
+    ['待派单', '待接乘', '进行中', '已完成', '已取消'].forEach(s => {
+        const checkbox = document.getElementById('filter-order-' + s);
+        if (checkbox && checkbox.checked) {
+            statuses.push(s);
+        }
+    });
+    return statuses;
+}
+
+function filterOrdersByStatus() {
+    refreshOverviewMap();
+}
+
+function selectAllOrderStatus() {
+    ['待派单', '待接乘', '进行中', '已完成', '已取消'].forEach(s => {
+        const checkbox = document.getElementById('filter-order-' + s);
+        if (checkbox) checkbox.checked = true;
+    });
+    filterOrdersByStatus();
+}
+
+function deselectAllOrderStatus() {
+    ['待派单', '待接乘', '进行中', '已完成', '已取消'].forEach(s => {
+        const checkbox = document.getElementById('filter-order-' + s);
+        if (checkbox) checkbox.checked = false;
+    });
+    filterOrdersByStatus();
+}
+
+// ===== 渲染函数 =====
 
 // 渲染停车场标记
 function renderParkingLotMarkers(data) {
@@ -94,56 +230,21 @@ function renderParkingLotMarkers(data) {
     });
 }
 
-// 显示停车场位置
-async function showParkingLotsOnMap() {
-    highlightCard('parking');
-    await refreshOverviewMap();
-}
-
-// 显示车辆位置
-async function showVehiclesOnMap() {
-    highlightCard('vehicles');
-    await refreshOverviewMap();
-}
-
-// 获取选中的状态列表
-function getSelectedVehicleStatuses() {
-    const statuses = [];
-    const allStatuses = ['巡游中', '调度中', '接乘中', '履约中', '维护中', '休息中'];
-    allStatuses.forEach(s => {
-        const checkbox = document.getElementById('filter-' + s);
-        if (checkbox && checkbox.checked) {
-            statuses.push(s);
-        }
+// 渲染站点标记
+function renderStationMarkers(data) {
+    data.forEach(s => {
+        const marker = new AMap.Marker({
+            position: [s.longitude, s.latitude],
+            content: `<div style="width: 24px; height: 24px; background: #1890ff; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); box-shadow: 0 2px 6px rgba(0,0,0,0.3); border: 2px solid white; display: flex; align-items: center; justify-content: center;">
+                <span style="transform: rotate(45deg); font-size: 10px;">📍</span>
+            </div>`,
+            offset: new AMap.Pixel(-12, -24),
+            title: `${s.name}\n类型: ${s.type}\n备注: ${s.remark || '无'}`
+        });
+        marker.getExtData = () => 'stations';
+        window.map.add(marker);
+        overviewMarkers.push(marker);
     });
-    return statuses;
-}
-
-// 多选状态筛选车辆
-async function filterVehiclesByStatus() {
-    if (!selectedTypes.has('vehicles')) {
-        selectedTypes.add('vehicles');
-        document.getElementById('card-vehicles')?.classList.add('active');
-    }
-    await refreshOverviewMap();
-}
-
-// 全选状态
-function selectAllVehicleStatus() {
-    ['巡游中', '调度中', '接乘中', '履约中', '维护中', '休息中'].forEach(s => {
-        const checkbox = document.getElementById('filter-' + s);
-        if (checkbox) checkbox.checked = true;
-    });
-    filterVehiclesByStatus();
-}
-
-// 全不选状态
-function deselectAllVehicleStatus() {
-    ['巡游中', '调度中', '接乘中', '履约中', '维护中', '休息中'].forEach(s => {
-        const checkbox = document.getElementById('filter-' + s);
-        if (checkbox) checkbox.checked = false;
-    });
-    filterVehiclesByStatus();
 }
 
 // 渲染车辆标记
@@ -166,77 +267,6 @@ function renderVehicleMarkers(data, autoFit = true) {
         window.map.add(marker);
         overviewMarkers.push(marker);
     });
-}
-
-// 显示站点位置
-async function showStationsOnMap() {
-    highlightCard('stations');
-    await refreshOverviewMap();
-}
-
-// 按类型筛选显示站点
-async function showStationsOnMapByType(type) {
-    if (!selectedTypes.has('stations')) {
-        selectedTypes.add('stations');
-        document.getElementById('card-stations')?.classList.add('active');
-    }
-    
-    const oldMarkers = overviewMarkers.filter(m => m.getExtData?.() === 'stations');
-    oldMarkers.forEach(m => window.map.remove(m));
-    overviewMarkers = overviewMarkers.filter(m => m.getExtData?.() !== 'stations');
-    
-    let data;
-    if (type) {
-        data = await API.getStationsByType(type);
-    } else {
-        data = await API.getStations();
-    }
-    
-    renderStationMarkers(data.slice(0, 200));
-}
-
-// 渲染站点标记
-function renderStationMarkers(data) {
-    data.forEach(s => {
-        const color = stationTypeColors[s.type] || '#4facfe';
-        const marker = new AMap.Marker({
-            position: [s.longitude, s.latitude],
-            content: `<div style="width: 18px; height: 18px; background: ${color}; border-radius: 50%; box-shadow: 0 2px 6px rgba(0,0,0,0.3); border: 2px solid white;"></div>`,
-            offset: new AMap.Pixel(-9, -9),
-            title: `${s.name}\n类型: ${s.type}\n备注: ${s.remark || '无'}`
-        });
-        marker.getExtData = () => 'stations';
-        window.map.add(marker);
-        overviewMarkers.push(marker);
-    });
-}
-
-// 显示订单位置
-async function showOrdersOnMap() {
-    highlightCard('orders');
-    await refreshOverviewMap();
-}
-
-// 按状态筛选显示订单
-async function showOrdersOnMapByStatus(status) {
-    if (!selectedTypes.has('orders')) {
-        selectedTypes.add('orders');
-        document.getElementById('card-orders')?.classList.add('active');
-    }
-    
-    const oldMarkers = overviewMarkers.filter(m => m.getExtData?.() === 'orders');
-    oldMarkers.forEach(m => window.map.remove(m));
-    overviewMarkers = overviewMarkers.filter(m => m.getExtData?.() !== 'orders');
-    
-    let data;
-    if (status) {
-        data = await API.getOrdersByStatus(status);
-    } else {
-        data = await API.getOrders();
-    }
-    
-    const stations = await API.getStations();
-    renderOrderMarkers(data, stations);
 }
 
 // 渲染订单标记
@@ -264,11 +294,37 @@ function renderOrderMarkers(data, stations) {
     });
 }
 
-// 隐藏所有筛选栏
+// 兼容旧函数名
+async function showParkingLotsOnMap() {
+    await refreshOverviewMap();
+}
+
+function toggleParkingMarkers() {
+    refreshOverviewMap();
+}
+
+async function showVehiclesOnMap() {
+    await refreshOverviewMap();
+}
+
+async function showStationsOnMap() {
+    await refreshOverviewMap();
+}
+
+async function showStationsOnMapByType(type) {
+    await refreshOverviewMap();
+}
+
+async function showOrdersOnMap() {
+    await refreshOverviewMap();
+}
+
+async function showOrdersOnMapByStatus(status) {
+    await refreshOverviewMap();
+}
+
 function hideAllFilters() {
-    document.getElementById('vehicle-map-filter').classList.remove('show');
-    document.getElementById('station-map-filter').classList.remove('show');
-    document.getElementById('order-map-filter').classList.remove('show');
+    // 筛选栏始终可见，不再隐藏
 }
 
 // ===== 概览页面调度动画 =====
@@ -309,6 +365,10 @@ function syncOverviewDispatchVehicles(data) {
     const currentVehicleIds = new Set(Object.keys(overviewDispatchVehicles));
     const newVehicleIds = new Set(data.map(d => d.vehicleId));
     
+    // 检查是否选中了"调度中"状态
+    const dispatchCheckbox = document.getElementById('filter-调度中');
+    const showDispatchVehicles = dispatchCheckbox && dispatchCheckbox.checked;
+    
     currentVehicleIds.forEach(id => {
         if (!newVehicleIds.has(id)) {
             const vehicle = overviewDispatchVehicles[id];
@@ -317,12 +377,31 @@ function syncOverviewDispatchVehicles(data) {
             if (vehicle.destMarker) window.map.remove(vehicle.destMarker);
             if (vehicle.originMarker) window.map.remove(vehicle.originMarker);
             delete overviewDispatchVehicles[id];
+        } else {
+            // 更新现有车辆的可见性
+            const vehicle = overviewDispatchVehicles[id];
+            if (vehicle.marker) {
+                vehicle.marker.setOptions({ visible: showDispatchVehicles });
+            }
+            if (vehicle.polyline && vehicle.routeVisible) {
+                vehicle.polyline.setOptions({ visible: showDispatchVehicles });
+            }
+            if (vehicle.destMarker) {
+                vehicle.destMarker.setOptions({ visible: showDispatchVehicles });
+            }
+            if (vehicle.originMarker) {
+                vehicle.originMarker.setOptions({ visible: showDispatchVehicles });
+            }
         }
     });
     
     data.forEach(d => {
         if (!overviewDispatchVehicles[d.vehicleId] && d.path && d.path.length > 0) {
             removeVehicleMarkerFromOverview(d.vehicleId);
+            
+            // 检查是否选中了"调度中"状态
+            const dispatchCheckbox = document.getElementById('filter-调度中');
+            const showDispatchVehicles = dispatchCheckbox && dispatchCheckbox.checked;
             
             const marker = new AMap.Marker({
                 position: [d.path[0][0], d.path[0][1]],
@@ -331,7 +410,8 @@ function syncOverviewDispatchVehicles(data) {
                 </div>`,
                 offset: new AMap.Pixel(-10, -10),
                 zIndex: 100,
-                extData: { vehicleId: d.vehicleId, type: 'dispatch' }
+                extData: { vehicleId: d.vehicleId, type: 'dispatch' },
+                visible: showDispatchVehicles
             });
             window.map.add(marker);
             
@@ -367,6 +447,10 @@ function toggleDispatchRoute(vehicleId) {
     const vehicle = overviewDispatchVehicles[vehicleId];
     if (!vehicle) return;
     
+    // 检查是否选中了"调度中"状态
+    const dispatchCheckbox = document.getElementById('filter-调度中');
+    const showDispatchVehicles = dispatchCheckbox && dispatchCheckbox.checked;
+    
     if (vehicle.routeVisible) {
         if (vehicle.polyline) {
             window.map.remove(vehicle.polyline);
@@ -387,7 +471,8 @@ function toggleDispatchRoute(vehicleId) {
             strokeColor: '#fa8c16',
             strokeWeight: 4,
             strokeOpacity: 0.7,
-            strokeStyle: 'dashed'
+            strokeStyle: 'dashed',
+            visible: showDispatchVehicles
         });
         window.map.add(vehicle.polyline);
         
@@ -397,7 +482,8 @@ function toggleDispatchRoute(vehicleId) {
                 📍 起点
             </div>`,
             offset: new AMap.Pixel(-10, -10),
-            zIndex: 99
+            zIndex: 99,
+            visible: showDispatchVehicles
         });
         window.map.add(vehicle.originMarker);
         
@@ -408,7 +494,8 @@ function toggleDispatchRoute(vehicleId) {
                     🎯 ${vehicle.targetStationName || '目标'}
                 </div>`,
                 offset: new AMap.Pixel(-10, -10),
-                zIndex: 99
+                zIndex: 99,
+                visible: showDispatchVehicles
             });
             window.map.add(vehicle.destMarker);
         }
@@ -429,15 +516,24 @@ function calculateOverviewPathLength(path) {
 
 function startOverviewDispatchAnimationLoop() {
     const intervalMs = 50;
-    const baseSpeedKmh = 60; // 基础速度 60 km/h
     const speedVariation = 10; // 随机扰动 ±10 km/h
+    
+    // 获取页面配置的速度
+    function getBaseSpeedKmh() {
+        const speedInput = document.getElementById('vehicle-speed-config');
+        if (speedInput) {
+            const speed = parseInt(speedInput.value) || 100;
+            return Math.max(10, Math.min(200, speed));
+        }
+        return 100; // 默认 100 km/h
+    }
     
     // 为每个车辆初始化速度和路线长度
     Object.values(overviewDispatchVehicles).forEach(vehicle => {
         if (!vehicle.pathLength) {
             vehicle.pathLength = calculateOverviewPathLength(vehicle.path);
             vehicle.traveledDistance = 0;
-            vehicle.currentSpeedKmh = baseSpeedKmh + (Math.random() - 0.5) * 2 * speedVariation;
+            vehicle.currentSpeedKmh = getBaseSpeedKmh() + (Math.random() - 0.5) * 2 * speedVariation;
         }
     });
     
@@ -449,7 +545,7 @@ function startOverviewDispatchAnimationLoop() {
             
             // 每秒更新一次随机速度
             if (!vehicle.lastSpeedUpdate || Date.now() - vehicle.lastSpeedUpdate > 1000) {
-                vehicle.currentSpeedKmh = baseSpeedKmh + (Math.random() - 0.5) * 2 * speedVariation;
+                vehicle.currentSpeedKmh = getBaseSpeedKmh() + (Math.random() - 0.5) * 2 * speedVariation;
                 vehicle.lastSpeedUpdate = Date.now();
             }
             
@@ -543,20 +639,28 @@ function startOverviewDispatchAnimationLoop() {
 }
 
 // 导出全局函数和变量
-window.selectedTypes = selectedTypes;
 window.overviewMarkers = overviewMarkers;
 window.overviewDispatchVehicles = overviewDispatchVehicles;
 window.clearOverviewMarkers = clearOverviewMarkers;
-window.highlightCard = highlightCard;
 window.refreshOverviewMap = refreshOverviewMap;
+window.loadAllOverviewData = loadAllOverviewData;
 window.showParkingLotsOnMap = showParkingLotsOnMap;
+window.toggleParkingMarkers = toggleParkingMarkers;
 window.showVehiclesOnMap = showVehiclesOnMap;
 window.showStationsOnMap = showStationsOnMap;
 window.showOrdersOnMap = showOrdersOnMap;
-window.getSelectedVehicleStatuses = getSelectedVehicleStatuses;
+window.filterParkingByStatus = filterParkingByStatus;
+window.selectAllParkingStatus = selectAllParkingStatus;
+window.deselectAllParkingStatus = deselectAllParkingStatus;
+window.filterStationsByType = filterStationsByType;
+window.selectAllStationTypes = selectAllStationTypes;
+window.deselectAllStationTypes = deselectAllStationTypes;
 window.filterVehiclesByStatus = filterVehiclesByStatus;
 window.selectAllVehicleStatus = selectAllVehicleStatus;
 window.deselectAllVehicleStatus = deselectAllVehicleStatus;
+window.filterOrdersByStatus = filterOrdersByStatus;
+window.selectAllOrderStatus = selectAllOrderStatus;
+window.deselectAllOrderStatus = deselectAllOrderStatus;
 window.showStationsOnMapByType = showStationsOnMapByType;
 window.showOrdersOnMapByStatus = showOrdersOnMapByStatus;
 window.hideAllFilters = hideAllFilters;

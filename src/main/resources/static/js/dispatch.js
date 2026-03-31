@@ -335,59 +335,22 @@ function syncVehicleDispatchVehicles(data) {
     const currentVehicleIds = new Set(Object.keys(vehicleDispatchVehicles));
     const newVehicleIds = new Set(data.map(d => d.vehicleId));
     
+    // 移除已完成的车辆
     currentVehicleIds.forEach(id => {
         if (!newVehicleIds.has(id)) {
-            const vehicle = vehicleDispatchVehicles[id];
-            if (vehicle.marker) window.vehicleDispatchMap.remove(vehicle.marker);
-            if (vehicle.polyline) window.vehicleDispatchMap.remove(vehicle.polyline);
-            if (vehicle.destMarker) window.vehicleDispatchMap.remove(vehicle.destMarker);
             delete vehicleDispatchVehicles[id];
         }
     });
     
     data.forEach(d => {
         if (!vehicleDispatchVehicles[d.vehicleId] && d.path && d.path.length > 0) {
-            const marker = new AMap.Marker({
-                position: [d.path[0][0], d.path[0][1]],
-                content: `<div style="background: #fa8c16; color: white; padding: 6px 10px; border-radius: 4px; font-size: 13px; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
-                    🚗 ${d.vehicleId}
-                </div>`,
-                offset: new AMap.Pixel(-15, -15),
-                autoRotation: true
-            });
-            window.vehicleDispatchMap.add(marker);
-            
-            const polyline = new AMap.Polyline({
-                path: d.path,
-                strokeColor: '#fa8c16',
-                strokeWeight: 5,
-                strokeOpacity: 0.8,
-                strokeStyle: 'dashed'
-            });
-            window.vehicleDispatchMap.add(polyline);
-            
-            let destMarker = null;
-            if (d.targetLongitude && d.targetLatitude) {
-                destMarker = new AMap.Marker({
-                    position: [d.targetLongitude, d.targetLatitude],
-                    content: `<div style="background: #52c41a; color: white; padding: 6px 10px; border-radius: 4px; font-size: 13px; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
-                        🎯 ${d.targetStationName || '目标'}
-                    </div>`,
-                    offset: new AMap.Pixel(-15, -15)
-                });
-                window.vehicleDispatchMap.add(destMarker);
-            }
-            
             vehicleDispatchVehicles[d.vehicleId] = {
-                marker, polyline, destMarker,
                 path: d.path,
                 currentIndex: 0,
                 progress: d.progress || 0,
                 animating: true,
                 vehicleId: d.vehicleId
             };
-            
-            window.vehicleDispatchMap.setFitView([polyline], false, [50, 50, 50, 50]);
         }
     });
     
@@ -410,15 +373,24 @@ function calculatePathLength(path) {
 // 启动车辆调度动画
 function startVehicleDispatchAnimation() {
     const intervalMs = 50;
-    const baseSpeedKmh = 60; // 基础速度 60 km/h
     const speedVariation = 10; // 随机扰动 ±10 km/h
+    
+    // 获取页面配置的速度
+    function getBaseSpeedKmh() {
+        const speedInput = document.getElementById('vehicle-speed-config');
+        if (speedInput) {
+            const speed = parseInt(speedInput.value) || 100;
+            return Math.max(10, Math.min(200, speed));
+        }
+        return 100; // 默认 100 km/h
+    }
     
     // 为每个车辆初始化速度和路线长度
     Object.values(vehicleDispatchVehicles).forEach(vehicle => {
         if (!vehicle.pathLength) {
             vehicle.pathLength = calculatePathLength(vehicle.path);
             vehicle.traveledDistance = 0;
-            vehicle.currentSpeedKmh = baseSpeedKmh + (Math.random() - 0.5) * 2 * speedVariation;
+            vehicle.currentSpeedKmh = getBaseSpeedKmh() + (Math.random() - 0.5) * 2 * speedVariation;
         }
     });
     
@@ -430,7 +402,7 @@ function startVehicleDispatchAnimation() {
             
             // 每秒更新一次随机速度
             if (!vehicle.lastSpeedUpdate || Date.now() - vehicle.lastSpeedUpdate > 1000) {
-                vehicle.currentSpeedKmh = baseSpeedKmh + (Math.random() - 0.5) * 2 * speedVariation;
+                vehicle.currentSpeedKmh = getBaseSpeedKmh() + (Math.random() - 0.5) * 2 * speedVariation;
                 vehicle.lastSpeedUpdate = Date.now();
             }
             
@@ -465,33 +437,7 @@ function startVehicleDispatchAnimation() {
                 currentIndex = i + 1;
             }
             
-            if (currentIndex < vehicle.path.length) {
-                const pos = vehicle.path[currentIndex];
-                if (vehicle.marker && pos.length >= 2) {
-                    // 计算精确位置（在当前线段上的偏移）
-                    if (currentIndex < vehicle.path.length - 1) {
-                        const [lng1, lat1] = vehicle.path[currentIndex];
-                        const [lng2, lat2] = vehicle.path[currentIndex + 1];
-                        const segLen = calculateDistance(lat1, lng1, lat2, lng2);
-                        const segProgress = segLen > 0 ? (vehicle.traveledDistance - accumulatedDist) / segLen : 0;
-                        const clampedProgress = Math.max(0, Math.min(1, segProgress));
-                        const actualLng = lng1 + (lng2 - lng1) * clampedProgress;
-                        const actualLat = lat1 + (lat2 - lat1) * clampedProgress;
-                        vehicle.marker.setPosition([actualLng, actualLat]);
-                        
-                        const angle = Math.atan2(lat2 - lat1, lng2 - lng1) * 180 / Math.PI;
-                        vehicle.marker.setAngle(angle);
-                    } else {
-                        vehicle.marker.setPosition([pos[0], pos[1]]);
-                    }
-                }
-            }
-            
-            if (vehicle.marker) {
-                vehicle.marker.setContent(`<div style="background: #fa8c16; color: white; padding: 6px 10px; border-radius: 4px; font-size: 13px; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
-                    🚗 ${vehicle.vehicleId} <span style="font-size: 11px;">(${Math.round(vehicle.progress)}%)</span>
-                </div>`);
-            }
+            // 根据已走距离找到当前位置索引
         });
         
         vehiclesToRemove.forEach(vehicleId => {
@@ -507,64 +453,13 @@ async function notifyVehicleDispatchArrived(vehicleId) {
         await API.notifyDispatchArrived(vehicleId);
         console.log(`车辆 ${vehicleId} 已到达调度目标站点`);
         
-        const vehicle = vehicleDispatchVehicles[vehicleId];
-        if (vehicle) {
-            if (vehicle.marker) window.vehicleDispatchMap.remove(vehicle.marker);
-            if (vehicle.polyline) window.vehicleDispatchMap.remove(vehicle.polyline);
-            if (vehicle.destMarker) window.vehicleDispatchMap.remove(vehicle.destMarker);
-            delete vehicleDispatchVehicles[vehicleId];
-        }
+        delete vehicleDispatchVehicles[vehicleId];
         
         loadStats();
         loadVehicles();
     } catch (error) {
         console.error(`通知车辆调度到达失败: ${vehicleId}`, error);
     }
-}
-
-// 显示车辆调度在地图上
-async function showVehicleDispatchOnMap() {
-    hideAllFilters();
-    clearOverviewMarkers();
-    highlightCard('dispatch');
-    
-    const data = await API.getDispatchInfo();
-    
-    data.forEach(d => {
-        if (d.path && d.path.length > 0) {
-            const marker = new AMap.Marker({
-                position: [d.longitude, d.latitude],
-                content: `<div style="background: #fa8c16; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,0.3);">
-                    🚗 ${d.vehicleId} (调度中)
-                </div>`,
-                offset: new AMap.Pixel(-15, -15)
-            });
-            window.map.add(marker);
-            window.overviewMarkers.push(marker);
-            
-            const polyline = new AMap.Polyline({
-                path: d.path,
-                strokeColor: '#fa8c16',
-                strokeWeight: 4,
-                strokeOpacity: 0.8,
-                strokeStyle: 'dashed'
-            });
-            window.map.add(polyline);
-            window.overviewMarkers.push(polyline);
-        }
-        
-        if (d.targetLongitude && d.targetLatitude) {
-            const destMarker = new AMap.Marker({
-                position: [d.targetLongitude, d.targetLatitude],
-                content: `<div style="background: #52c41a; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,0.3);">
-                    📍 ${d.targetStationName || '目标'}
-                </div>`,
-                offset: new AMap.Pixel(-15, -15)
-            });
-            window.map.add(destMarker);
-            window.overviewMarkers.push(destMarker);
-        }
-    });
 }
 
 // 触发车辆调度
@@ -586,5 +481,4 @@ window.showOrderDispatchOnMap = showOrderDispatchOnMap;
 window.triggerOrderDispatch = triggerOrderDispatch;
 window.startVehicleDispatchUpdate = startVehicleDispatchUpdate;
 window.loadVehicleDispatchInfo = loadVehicleDispatchInfo;
-window.showVehicleDispatchOnMap = showVehicleDispatchOnMap;
 window.triggerVehicleDispatch = triggerVehicleDispatch;

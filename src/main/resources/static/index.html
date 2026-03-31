@@ -21,17 +21,26 @@
             <button class="tab" onclick="showPanel('orders')">📋 订单管理</button>
             <button class="tab" onclick="showPanel('order-dispatch')">🎯 派单监控</button>
             <button class="tab" onclick="showPanel('vehicle-dispatch')">🔄 车辆调度</button>
-            <button class="tab" onclick="showPanel('route')">🗺️ 路线规划</button>
         </div>
         
         <!-- 概览面板 -->
         <div id="overview" class="panel active">
-            <div class="stats">
-                <div class="stat-card" id="card-parking" onclick="showParkingLotsOnMap()"><h3>停车场总数</h3><div class="number" id="stat-parking">0</div></div>
-                <div class="stat-card" id="card-vehicles" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);" onclick="showVehiclesOnMap()"><h3>车辆总数</h3><div class="number" id="stat-vehicles">0</div></div>
-                <div class="stat-card" id="card-stations" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);" onclick="showStationsOnMap()"><h3>站点总数</h3><div class="number" id="stat-stations">0</div></div>
-                <div class="stat-card" id="card-orders" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);" onclick="showOrdersOnMap()"><h3>订单总数</h3><div class="number" id="stat-orders">0</div></div>
-                <div class="stat-card" id="card-dispatch" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);"><h3>执行任务车辆</h3><div class="number" id="stat-dispatch">0</div><small style="font-size: 11px;">(派单+调度)</small></div>
+            <div class="map-filter" id="parking-map-filter">
+                <label>停车场状态筛选：</label>
+                <label style="margin: 0 8px; cursor: pointer;"><input type="checkbox" id="filter-parking-使用中" onchange="filterParkingByStatus()"> 🅿️ 使用中</label>
+                <label style="margin: 0 8px; cursor: pointer;"><input type="checkbox" id="filter-parking-未启用" onchange="filterParkingByStatus()"> ⚪ 未启用</label>
+                <button class="btn btn-primary" style="margin-left: 10px;" onclick="selectAllParkingStatus()">全选</button>
+                <button class="btn" style="background:#d9d9d9;" onclick="deselectAllParkingStatus()">全不选</button>
+            </div>
+            <div class="map-filter" id="station-map-filter">
+                <label>站点类型筛选：</label>
+                <label style="margin: 0 8px; cursor: pointer;"><input type="checkbox" id="filter-station-商圈" onchange="filterStationsByType()"> 📍 商圈</label>
+                <label style="margin: 0 8px; cursor: pointer;"><input type="checkbox" id="filter-station-景区" onchange="filterStationsByType()"> 📍 景区</label>
+                <label style="margin: 0 8px; cursor: pointer;"><input type="checkbox" id="filter-station-医院" onchange="filterStationsByType()"> 📍 医院</label>
+                <label style="margin: 0 8px; cursor: pointer;"><input type="checkbox" id="filter-station-社区" onchange="filterStationsByType()"> 📍 社区</label>
+                <label style="margin: 0 8px; cursor: pointer;"><input type="checkbox" id="filter-station-交通枢纽" onchange="filterStationsByType()"> 📍 交通枢纽</label>
+                <button class="btn btn-primary" style="margin-left: 10px;" onclick="selectAllStationTypes()">全选</button>
+                <button class="btn" style="background:#d9d9d9;" onclick="deselectAllStationTypes()">全不选</button>
             </div>
             <div class="map-filter" id="vehicle-map-filter">
                 <label>车辆状态筛选：</label>
@@ -44,23 +53,20 @@
                 <button class="btn btn-primary" style="margin-left: 10px;" onclick="selectAllVehicleStatus()">全选</button>
                 <button class="btn" style="background:#d9d9d9;" onclick="deselectAllVehicleStatus()">全不选</button>
             </div>
-            <div class="map-filter" id="station-map-filter">
-                <label>站点类型筛选：</label>
-                <button class="btn btn-primary" onclick="showStationsOnMapByType('')">全部</button>
-                <button class="btn" style="background:#ff6b6b;color:white;" onclick="showStationsOnMapByType('商圈')">🏪 商圈</button>
-                <button class="btn" style="background:#51cf66;color:white;" onclick="showStationsOnMapByType('景区')">🏞️ 景区</button>
-                <button class="btn" style="background:#339af0;color:white;" onclick="showStationsOnMapByType('医院')">🏥 医院</button>
-                <button class="btn" style="background:#845ef7;color:white;" onclick="showStationsOnMapByType('社区')">🏘️ 社区</button>
-                <button class="btn" style="background:#fcc419;color:white;" onclick="showStationsOnMapByType('交通枢纽')">🚉 交通枢纽</button>
-            </div>
             <div class="map-filter" id="order-map-filter">
                 <label>订单状态筛选：</label>
-                <button class="btn btn-primary" onclick="showOrdersOnMapByStatus('')">全部</button>
-                <button class="btn btn-info" onclick="showOrdersOnMapByStatus('待派单')">📋 待派单</button>
-                <button class="btn btn-warning" onclick="showOrdersOnMapByStatus('待接乘')">🚕 待接乘</button>
-                <button class="btn btn-success" onclick="showOrdersOnMapByStatus('进行中')">🚗 进行中</button>
-                <button class="btn" style="background:#52c41a;color:white;" onclick="showOrdersOnMapByStatus('已完成')">✅ 已完成</button>
-                <button class="btn btn-danger" onclick="showOrdersOnMapByStatus('已取消')">❌ 已取消</button>
+                <label style="margin: 0 8px; cursor: pointer;"><input type="checkbox" id="filter-order-待派单" checked onchange="filterOrdersByStatus()"> 📋 待派单</label>
+                <label style="margin: 0 8px; cursor: pointer;"><input type="checkbox" id="filter-order-待接乘" checked onchange="filterOrdersByStatus()"> 🚕 待接乘</label>
+                <label style="margin: 0 8px; cursor: pointer;"><input type="checkbox" id="filter-order-进行中" checked onchange="filterOrdersByStatus()"> 🚗 进行中</label>
+                <label style="margin: 0 8px; cursor: pointer;"><input type="checkbox" id="filter-order-已完成" onchange="filterOrdersByStatus()"> ✅ 已完成</label>
+                <label style="margin: 0 8px; cursor: pointer;"><input type="checkbox" id="filter-order-已取消" onchange="filterOrdersByStatus()"> ❌ 已取消</label>
+                <button class="btn btn-primary" style="margin-left: 10px;" onclick="selectAllOrderStatus()">全选</button>
+                <button class="btn" style="background:#d9d9d9;" onclick="deselectAllOrderStatus()">全不选</button>
+            </div>
+            <div class="map-filter" id="speed-config-filter">
+                <label>车辆行驶速度：</label>
+                <input type="number" id="vehicle-speed-config" value="100" min="10" max="200" style="width: 80px; padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px;">
+                <span style="color: #666;">km/h（范围：10-200）</span>
             </div>
             <div class="map-container"><div id="map" class="map"></div></div>
         </div>
@@ -188,10 +194,8 @@
             <p style="margin-bottom: 15px; color: #666; font-size: 14px;">调度：将"巡游中"车辆调度到指定站点（与订单无关）</p>
             <div style="margin-bottom: 15px;">
                 <button class="btn btn-primary" onclick="triggerVehicleDispatch()">🔄 手动触发调度</button>
-                <button class="btn btn-success" onclick="showVehicleDispatchOnMap()">📍 显示调度车辆</button>
                 <span style="margin-left: 15px; color: #666;">自动调度间隔：2分钟</span>
             </div>
-            <div class="map-container" style="margin-top: 15px;"><div id="vehicle-dispatch-map" class="map"></div></div>
             <div id="vehicle-dispatch-info" style="margin-top: 15px;">
                 <h4 style="margin-bottom: 10px;">调度车辆列表</h4>
                 <table id="vehicle-dispatch-table">
@@ -201,26 +205,7 @@
             </div>
         </div>
         
-        <!-- 路线规划面板 -->
-        <div id="route" class="panel">
-            <div class="form-group">
-                <label>起始地点</label>
-                <input type="text" id="route-start" placeholder="例如: 北京站">
-            </div>
-            <div class="form-group">
-                <label>目的地点</label>
-                <input type="text" id="route-end" placeholder="例如: 天安门">
-            </div>
-            <button class="btn btn-primary" onclick="planRoute()">规划路线</button>
-            <button class="btn btn-success" id="driveBtn" onclick="startDriving()" disabled>开始行驶</button>
-            <span style="margin-left: 15px; color: #666;">行驶速度：40 km/s（±5 km/s 随机扰动）</span>
-            <div class="map-container" style="margin-top: 15px;"><div id="route-map" class="map"></div></div>
-            <div id="route-info" style="margin-top: 15px; padding: 10px; background: #f5f5f5; border-radius: 4px; display: none;">
-                <p>距离: <span id="route-distance"></span></p>
-                <p>时间: <span id="route-duration"></span></p>
-                <p>当前速度: <span id="current-speed">-</span> km/h</p>
-            </div>
-        </div>
+
     </div>
     
     <!-- 模态框 -->
@@ -245,7 +230,6 @@
     <script src="js/vehicles.js"></script>
     <script src="js/orders.js"></script>
     <script src="js/modal.js"></script>
-    <script src="js/route.js"></script>
     <script src="js/dispatch.js"></script>
     <script src="js/overview.js"></script>
     <script src="js/app.js"></script>

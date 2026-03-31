@@ -3,7 +3,7 @@
  */
 
 // 全局变量
-let map, routeMap, orderDispatchMap, vehicleDispatchMap;
+let map, orderDispatchMap;
 let orderDispatchUpdateInterval = null;
 let vehicleDispatchUpdateInterval = null;
 
@@ -28,15 +28,11 @@ document.addEventListener('DOMContentLoaded', () => {
 // 初始化地图
 function initMaps() {
     map = new AMap.Map('map', { zoom: 11, center: [118.795, 32.05], viewMode: '2D' });
-    routeMap = new AMap.Map('route-map', { zoom: 11, center: [116.397, 39.909], viewMode: '2D' });
     orderDispatchMap = new AMap.Map('order-dispatch-map', { zoom: 11, center: [118.795, 32.05], viewMode: '2D' });
-    vehicleDispatchMap = new AMap.Map('vehicle-dispatch-map', { zoom: 11, center: [118.795, 32.05], viewMode: '2D' });
     
     // 导出到全局
     window.map = map;
-    window.routeMap = routeMap;
     window.orderDispatchMap = orderDispatchMap;
-    window.vehicleDispatchMap = vehicleDispatchMap;
 }
 
 // 加载统计数据
