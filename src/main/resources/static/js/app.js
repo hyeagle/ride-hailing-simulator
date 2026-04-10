@@ -64,6 +64,15 @@ function showPanel(panelId) {
     document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
     event.target.classList.add('active');
     document.getElementById(panelId).classList.add('active');
+    
+    // 如果是路线规划面板，延迟初始化地图
+    if (panelId === 'route-planning') {
+        setTimeout(() => {
+            if (window.ensureRouteMapInitialized) {
+                window.ensureRouteMapInitialized();
+            }
+        }, 100);
+    }
 }
 
 // 导出全局函数
